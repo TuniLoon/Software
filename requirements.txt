@@ -1,0 +1,32 @@
+# TuniLoon Software Requirements
+# Python 3.10+ required
+
+# Core Communication
+pyserial==3.5.2
+
+# Web Dashboard
+flask==3.0.0
+jinja2==3.1.2
+
+# Mapping & Visualization
+folium==0.15.1
+branca==1.0.1
+
+# Data Handling
+pandas==2.1.3
+numpy==1.26.2
+
+# Graphing
+plotly==5.18.0
+
+# MQTT (Cloud)
+paho-mqtt==1.6.1
+
+# HTTP Requests (for Sondehub/Telegram)
+requests==2.31.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Optional (for testing)
+pytest==7.4.3
