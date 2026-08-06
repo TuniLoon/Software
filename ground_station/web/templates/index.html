@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuniLoon Ground Station</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Leaflet.js for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Plotly for graphs -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-left">
+                <h1><i class="fas fa-balloon"></i> TuniLoon</h1>
+                <span class="badge" id="status-badge">● Connecting...</span>
+            </div>
+            <div class="header-right">
+                <span id="packet-count">Packets: 0</span>
+                <button id="theme-toggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button id="clear-btn" title="Clear data">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </header>
+        
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <span class="stat-label">Altitude</span>
+                <span class="stat-value" id="stat-altitude">0 m</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Latitude</span>
+                <span class="stat-value" id="stat-latitude">0.0000</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Longitude</span>
+                <span class="stat-value" id="stat-longitude">0.0000</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Temperature</span>
+                <span class="stat-value" id="stat-temperature">0.0 °C</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Pressure</span>
+                <span class="stat-value" id="stat-pressure">0.0 hPa</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Status</span>
+                <span class="stat-value status-badge" id="stat-status">—</span>
+            </div>
+        </div>
+        
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Map -->
+            <div class="card map-card">
+                <div class="card-header">
+                    <span><i class="fas fa-map"></i> Live Position</span>
+                    <span id="map-coords">Lat: 0.0000, Lon: 0.0000</span>
+                </div>
+                <div id="map"></div>
+            </div>
+            
+            <!-- Telemetry Details -->
+            <div class="card details-card">
+                <div class="card-header">
+                    <span><i class="fas fa-chart-line"></i> Telemetry Details</span>
+                    <span id="last-updated">Last update: —</span>
+                </div>
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Time</span>
+                        <span class="detail-value" id="detail-time">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Altitude</span>
+                        <span class="detail-value" id="detail-altitude">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Latitude</span>
+                        <span class="detail-value" id="detail-latitude">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Longitude</span>
+                        <span class="detail-value" id="detail-longitude">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Temperature</span>
+                        <span class="detail-value" id="detail-temperature">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Pressure</span>
+                        <span class="detail-value" id="detail-pressure">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Humidity</span>
+                        <span class="detail-value" id="detail-humidity">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Thermal</span>
+                        <span class="detail-value" id="detail-thermal">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value" id="detail-status">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Checksum</span>
+                        <span class="detail-value" id="detail-checksum">—</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Altitude Graph -->
+            <div class="card graph-card">
+                <div class="card-header">
+                    <span><i class="fas fa-arrow-up"></i> Altitude Profile</span>
+                    <span>Max: <span id="graph-max-alt">0</span> m</span>
+                </div>
+                <div id="altitude-graph"></div>
+            </div>
+            
+            <!-- Temperature Graph -->
+            <div class="card graph-card">
+                <div class="card-header">
+                    <span><i class="fas fa-thermometer-half"></i> Temperature Profile</span>
+                    <span>Min: <span id="graph-min-temp">0</span>°C | Max: <span id="graph-max-temp">0</span>°C</span>
+                </div>
+                <div id="temperature-graph"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
