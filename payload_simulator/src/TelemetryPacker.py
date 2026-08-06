@@ -1,42 +1,21 @@
 """
 TelemetryPacker.py
-Pack telemetry data according to Sprint 0.3 protocol.
+Pack telemetry data according to the protocol.
 """
 
 class TelemetryPacker:
-    """Generate and pack telemetry data."""
-    
     def __init__(self, identifier="TUN"):
         self.identifier = identifier
     
     def compute_checksum(self, lat, lon, alt, press, temp, hum, thermal):
-        """Calculate checksum."""
-        sum_int = (int(lat * 10000) + int(lon * 10000) + int(alt) +
-                   int(press * 10) + int(temp * 10) + int(hum * 10) +
-                   int(thermal * 10))
+        eps = 1e-9
+        sum_int = (int(round(lat * 10000 + eps)) + int(round(lon * 10000 + eps)) + int(alt) +
+                   int(round(press * 10 + eps)) + int(round(temp * 10 + eps)) + int(round(hum * 10 + eps)) +
+                   int(round(thermal * 10 + eps)))
         return sum_int % 10000
     
     def pack(self, lat, lon, alt, press, temp, hum, thermal, status):
-        """
-        Pack telemetry data into a packet string.
-        
-        Args:
-            lat: Latitude (float)
-            lon: Longitude (float)
-            alt: Altitude in meters (int)
-            press: Pressure in hPa (float)
-            temp: Temperature in °C (float)
-            hum: Humidity in % (float)
-            thermal: Thermal average in °C (float)
-            status: Status code (A/D/L/E/F)
-        
-        Returns:
-            str: Formatted packet string
-        """
-        # Calculate checksum
         checksum = self.compute_checksum(lat, lon, alt, press, temp, hum, thermal)
-        
-        # Format packet
         packet = (f"{self.identifier},"
                   f"{lat:.4f},"
                   f"{lon:.4f},"
@@ -47,11 +26,9 @@ class TelemetryPacker:
                   f"{thermal:.1f},"
                   f"{checksum:04d},"
                   f"{status}")
-        
         return packet
     
     def pack_from_dict(self, data_dict):
-        """Pack from a dictionary of data."""
         return self.pack(
             data_dict['latitude'],
             data_dict['longitude'],
@@ -63,11 +40,8 @@ class TelemetryPacker:
             data_dict['status']
         )
 
-
 if __name__ == "__main__":
-    # Test the packer
     packer = TelemetryPacker()
-    
     test_data = {
         'latitude': 36.8442,
         'longitude': 10.1213,
@@ -78,8 +52,5 @@ if __name__ == "__main__":
         'thermal_avg': 28.7,
         'status': 'A'
     }
-    
     packet = packer.pack_from_dict(test_data)
     print(f"[INFO] Generated packet: {packet}")
-    
-    # Expected: TUN,36.8442,10.1213,15234,1012.4,22.5,45.2,28.7,5977,A

@@ -28,7 +28,7 @@ class FlightPathGenerator:
         self.max_altitude = 30000  # meters
         self.ascent_rate = 5.0     # m/s (typical for weather balloons)
         self.descent_rate = 15.0   # m/s (faster due to parachute)
-        self.total_time = 7200     # 2 hours in seconds
+        self.total_time = 9000     # 2 hours in seconds
         
         # Wind drift coefficients (simplified)
         # Higher altitude = more drift
