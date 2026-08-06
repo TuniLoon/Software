@@ -1,0 +1,34 @@
+{
+    "mqtt": {
+        "broker": "broker.hivemq.com",
+        "port": 1883,
+        "username": "",
+        "password": "",
+        "topic": "tuniloon/telemetry",
+        "client_id": "tuniloon_groundstation"
+    },
+    "telegram": {
+        "bot_token": "8450958310:AAEUlDMgNeCijhEVCAlpVi1LDZ3jG7aou1w",
+        "chat_id": "7837387129",
+        "enabled": true
+    },
+    "email": {
+        "enabled": false,
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "username": "your_email@gmail.com",
+        "password": "your_app_password",
+        "to_email": "recipient@example.com"
+    },
+    "sondehub": {
+        "enabled": false,
+        "callsign": "TUNILOON",
+        "upload_url": "https://api.sondehub.org/v1/telemetry"
+    },
+    "alerts": {
+        "max_altitude": 30000,
+        "min_altitude": 100,
+        "status_change": true,
+        "landing": true
+    }
+}

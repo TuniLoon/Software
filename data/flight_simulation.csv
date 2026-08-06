@@ -1,0 +1,2 @@
+timestamp,timestamp_unix,identifier,latitude,longitude,altitude,pressure,temperature,humidity,thermal_avg,checksum,status,status_description
+2026-08-06T10:27:00.124048,1786008420.1240578,TUN,35.8276,10.6402,0,1013.7,25.4,58.9,24.8,5905,L,Landing

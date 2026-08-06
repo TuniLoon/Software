@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Conda
+anaconda3/
+envs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files
+data/*.csv
+data/*.json
+test_data/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (CRITICAL!)
+config/cloud_config.json
+*.secret
+*.key
+.env
