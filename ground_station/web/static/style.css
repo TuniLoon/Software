@@ -1,0 +1,317 @@
+/* TuniLoon Dashboard Styles */
+/* Light Theme (Default) */
+
+:root {
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #1a1a2e;
+    --text-secondary: #555;
+    --border-color: #e0e0e0;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    --badge-online: #00c853;
+    --badge-offline: #ff1744;
+    --status-ascent: #2196f3;
+    --status-descent: #ff9800;
+    --status-landing: #4caf50;
+    --status-error: #f44336;
+    --header-bg: #ffffff;
+    --card-header-bg: #f8f9fa;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: #1e2a4a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #aaa;
+    --border-color: #2a3a5c;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --header-bg: #16213e;
+    --card-header-bg: #1e2a4a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--header-bg);
+    padding: 16px 24px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    transition: background 0.3s;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-left h1 {
+    font-size: 24px;
+    color: var(--text-primary);
+}
+
+.header-left h1 i {
+    color: #ff6b35;
+}
+
+.badge {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.badge.online {
+    background: rgba(0, 200, 83, 0.15);
+    color: var(--badge-online);
+}
+
+.badge.offline {
+    background: rgba(255, 23, 68, 0.15);
+    color: var(--badge-offline);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.header-right button {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.header-right button:hover {
+    background: var(--bg-primary);
+}
+
+/* Stats Bar */
+.stats-bar {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    padding: 14px 18px;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-value.status-badge {
+    font-size: 14px;
+    padding: 2px 12px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.status-A { background: rgba(33, 150, 243, 0.15); color: #2196f3; }
+.status-D { background: rgba(255, 152, 0, 0.15); color: #ff9800; }
+.status-L { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
+.status-E { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+.status-F { background: rgba(156, 39, 176, 0.15); color: #9c27b0; }
+
+/* Main Grid */
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Cards */
+.card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: background 0.3s;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    background: var(--card-header-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.card-header i {
+    margin-right: 8px;
+}
+
+/* Map */
+.map-card {
+    grid-column: 1 / 2;
+    grid-row: 1 / 3;
+    min-height: 500px;
+}
+
+#map {
+    height: 500px;
+    width: 100%;
+}
+
+#map-coords {
+    font-weight: 400;
+    font-size: 12px;
+}
+
+/* Details */
+.details-card {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+    padding: 12px 18px;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+}
+
+.detail-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Graphs */
+.graph-card {
+    grid-column: span 1;
+    min-height: 300px;
+}
+
+#altitude-graph, #temperature-graph {
+    height: 280px;
+    width: 100%;
+    padding: 8px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .map-card {
+        grid-column: 1;
+        grid-row: auto;
+        min-height: 400px;
+    }
+    
+    #map {
+        height: 400px;
+    }
+    
+    .details-card {
+        grid-column: 1;
+        grid-row: auto;
+    }
+    
+    .graph-card {
+        grid-column: 1;
+    }
+    
+    .stats-bar {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
