@@ -1,0 +1,26 @@
+{
+    "model": {
+        "algorithm": "IsolationForest",
+        "contamination": 0.05,
+        "n_estimators": 100,
+        "random_state": 42
+    },
+    "features": {
+        "window_size": 10,
+        "include_derivative": true,
+        "include_rolling_mean": true,
+        "include_volatility": true
+    },
+    "thresholds": {
+        "anomaly_score": 0.1,
+        "confidence": 0.7
+    },
+    "alerts": {
+        "telegram": true,
+        "log": true
+    },
+    "training": {
+        "data_path": "data/training_data.csv",
+        "model_save_path": "ml/models/anomaly_model.pkl"
+    }
+}
