@@ -30,3 +30,7 @@ python-dateutil==2.8.2
 
 # Optional (for testing)
 pytest==7.4.3
+
+# ML
+scikit-learn==1.3.0
+joblib==1.3.2

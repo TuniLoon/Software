@@ -21,8 +21,8 @@ class FlightPathGenerator:
     
     def __init__(self, config_path: str = None):
         """Initialize with optional config file."""
-        self.launch_lat = 35.8276
-        self.launch_lon = 10.6402
+        self.launch_lat = 34.7400
+        self.launch_lon = 10.7600
         
         # Flight parameters
         self.max_altitude = 30000  # meters

@@ -8,9 +8,9 @@
         "transmission_interval": 30,
         "max_altitude": 30000,
         "launch_site": {
-            "latitude": 35.8276,
-            "longitude": 10.6402,
-            "name": "Sousse, Tunisia"
+            "latitude": 34.7400,
+            "longitude": 10.7600,
+            "name": "Sfax, Tunisia"
         }
     },
     "communication": {

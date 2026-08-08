@@ -29,52 +29,33 @@ class TelemetryLogger:
         self.data_buffer = []
         self.csv_writer = None
         self.csv_file = None
-        
-        # Initialize CSV with headers
-        self._init_csv()
+        self.fieldnames = None
     
-    def _init_csv(self):
-        """Initialize CSV file with headers."""
+    def _init_csv(self, fieldnames: List[str]):
+        """Initialize CSV file with dynamic headers."""
+        self.fieldnames = fieldnames
         self.csv_file = open(self.csv_path, 'w', newline='', encoding='utf-8')
-        
-        headers = [
-            'timestamp', 'timestamp_unix', 'identifier',
-            'latitude', 'longitude', 'altitude',
-            'pressure', 'temperature', 'humidity', 'thermal_avg',
-            'checksum', 'status', 'status_description'
-        ]
-        
-        self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=headers)
+        self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=fieldnames)
         self.csv_writer.writeheader()
         self.csv_file.flush()
         print(f"[INFO] CSV logger initialized: {self.csv_path}")
     
     def log(self, data: Dict) -> bool:
-        """
-        Log a telemetry data point.
-        
-        Args:
-            data: Decoded telemetry data
-        
-        Returns:
-            True if successful
-        """
+        """Log a telemetry data point."""
         try:
-            # Write to CSV
+            if self.csv_writer is None:
+                fieldnames = list(data.keys())
+                self._init_csv(fieldnames)
+            
             self.csv_writer.writerow(data)
             self.csv_file.flush()
-            
-            # Add to buffer for JSON
             self.data_buffer.append(data)
-            
             return True
-            
         except Exception as e:
             print(f"[ERROR] Failed to log data: {e}")
             return False
     
     def log_batch(self, data_list: List[Dict]) -> int:
-        """Log multiple data points."""
         count = 0
         for data in data_list:
             if self.log(data):
@@ -82,12 +63,6 @@ class TelemetryLogger:
         return count
     
     def save_json(self) -> str:
-        """
-        Save buffered data to JSON file.
-        
-        Returns:
-            Path to saved file
-        """
         try:
             with open(self.json_path, 'w', encoding='utf-8') as f:
                 json.dump(self.data_buffer, f, indent=2, ensure_ascii=False)
@@ -98,18 +73,14 @@ class TelemetryLogger:
             return ""
     
     def close(self):
-        """Close the CSV file."""
         if self.csv_file:
             self.csv_file.close()
             print(f"[INFO] CSV closed: {self.csv_path}")
     
     def get_stats(self) -> Dict:
-        """Get statistics about logged data."""
         if not self.data_buffer:
             return {'count': 0}
-        
         altitudes = [d.get('altitude', 0) for d in self.data_buffer]
-        
         return {
             'count': len(self.data_buffer),
             'min_altitude': min(altitudes) if altitudes else 0,
@@ -123,11 +94,8 @@ class TelemetryLogger:
             }
         }
 
-
 if __name__ == "__main__":
-    # Test the logger
     logger = TelemetryLogger(data_dir="test_data/", filename="test_flight")
-    
     test_data = {
         'timestamp': '2024-11-15T10:00:00',
         'timestamp_unix': 1731679200,
@@ -141,13 +109,13 @@ if __name__ == "__main__":
         'thermal_avg': 28.7,
         'checksum': 5977,
         'status': 'A',
-        'status_description': 'Ascent'
+        'status_description': 'Ascent',
+        'anomaly': True,
+        'anomaly_score': -0.71,
+        'anomaly_confidence': 1.0
     }
-    
     logger.log(test_data)
     logger.save_json()
-    
     stats = logger.get_stats()
     print(f"[INFO] Stats: {json.dumps(stats, indent=2)}")
-    
     logger.close()
