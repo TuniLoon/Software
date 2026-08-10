@@ -323,6 +323,44 @@ def run_mock_consumer_thread():
     thread.daemon = True
     thread.start()
     return thread
+# ------------------------- Weather Routes (Sprint 10) -------------------------
+
+from ground_station.src.weather_service import WeatherService
+weather_service = WeatherService()  # use env var for API key
+
+@app.route('/api/weather/current')
+def weather_current():
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+    if lat is None or lon is None:
+        return jsonify({'error': 'Missing lat/lon'}), 400
+    data = weather_service.get_current_weather(lat, lon)
+    if data:
+        return jsonify(data)
+    return jsonify({'error': 'Weather data unavailable'}), 500
+
+@app.route('/api/weather/forecast')
+def weather_forecast():
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+    cnt = request.args.get('cnt', 8, type=int)
+    if lat is None or lon is None:
+        return jsonify({'error': 'Missing lat/lon'}), 400
+    data = weather_service.get_forecast(lat, lon, cnt)
+    if data:
+        return jsonify(data)
+    return jsonify({'error': 'Forecast unavailable'}), 500
+
+@app.route('/api/weather/wind')
+def weather_wind():
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+    if lat is None or lon is None:
+        return jsonify({'error': 'Missing lat/lon'}), 400
+    wind = weather_service.get_wind(lat, lon)
+    if wind:
+        return jsonify(wind)
+    return jsonify({'error': 'Wind data unavailable'}), 500
 
 
 if __name__ == '__main__':

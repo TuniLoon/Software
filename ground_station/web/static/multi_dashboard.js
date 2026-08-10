@@ -41,9 +41,9 @@ const DOM = {
 function init() {
     console.log('[Multi] Initializing multi-balloon dashboard...');
     initMap();
+    initWeather();
     initEventListeners();
     startDataPolling();
-    // Add demo balloons after a moment
     setTimeout(addDemoBalloons, 1000);
     console.log('[Multi] Ready!');
 }
@@ -53,7 +53,7 @@ function init() {
 // ============================================================
 
 function initMap() {
-    const center = [35.8276, 10.6402];
+    const center = [34.7400, 10.7600];
     state.map = L.map('map').setView(center, 10);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -65,7 +65,6 @@ function initMap() {
 function addMarker(balloonId, data) {
     const { latitude, longitude, altitude } = data;
     
-    // Remove existing marker
     if (state.markers[balloonId]) {
         state.map.removeLayer(state.markers[balloonId]);
     }
@@ -87,7 +86,6 @@ function addMarker(balloonId, data) {
     
     state.markers[balloonId] = marker;
     
-    // Update path
     updatePath(balloonId, { latitude, longitude });
 }
 
@@ -108,7 +106,7 @@ function updatePath(balloonId, pos) {
 }
 
 function resetMapView() {
-    const center = [35.8276, 10.6402];
+    const center = [34.7400, 10.7600];
     state.map.setView(center, 10);
 }
 
@@ -144,7 +142,10 @@ function selectBalloon(balloonId) {
 // ============================================================
 
 function addBalloon(balloonId, name) {
-    if (state.balloons[balloonId]) return;
+    if (state.balloons[balloonId]) {
+        console.log(`[Multi] Balloon ${balloonId} already exists, skipping`);
+        return;
+    }
     
     const colorIndex = Object.keys(state.balloons).length % state.colors.length;
     state.balloons[balloonId] = {
@@ -160,6 +161,7 @@ function addBalloon(balloonId, name) {
     
     renderBalloonList();
     updateCounts();
+    console.log(`[Multi] Added balloon: ${balloonId}`);
 }
 
 function updateBalloon(balloonId, data) {
@@ -174,7 +176,6 @@ function updateBalloon(balloonId, data) {
     b.history.push(data);
     if (b.history.length > 200) b.history.shift();
     
-    // Update marker
     if (data.latitude && data.longitude) {
         addMarker(balloonId, data);
     }
@@ -214,15 +215,27 @@ function updateCounts() {
 }
 
 // ============================================================
-// Demo Data Generation
+// Demo Data Generation (Fixed)
 // ============================================================
 
 function addDemoBalloons() {
+    console.log('[Multi] Adding demo balloons...');
+    
+    // First, remove any existing demo balloons with the same IDs
+    const demoIds = ['TUN001', 'TUN002', 'TUN003', 'TUN004'];
+    demoIds.forEach(id => {
+        if (state.balloons[id]) {
+            console.log(`[Multi] Removing existing demo balloon ${id}`);
+            removeBalloon(id);
+        }
+    });
+
+    // Now add fresh ones
     const demos = [
-        { id: 'TUN001', name: 'TuniLoon-1', lat: 35.8276, lon: 10.6402, alt: 15000, temp: -35, status: 'A' },
-        { id: 'TUN002', name: 'TuniLoon-2', lat: 35.9500, lon: 10.8000, alt: 8000, temp: -10, status: 'A' },
-        { id: 'TUN003', name: 'TuniLoon-3', lat: 35.7000, lon: 10.5000, alt: 0, temp: 25, status: 'L' },
-        { id: 'TUN004', name: 'TuniLoon-4', lat: 36.0000, lon: 10.9000, alt: 22000, temp: -50, status: 'A' },
+        { id: 'TUN001', name: 'TuniLoon-1', lat: 34.7400, lon: 10.7600, alt: 15000, temp: -35, status: 'A' },
+        { id: 'TUN002', name: 'TuniLoon-2', lat: 34.8000, lon: 10.8200, alt: 8000, temp: -10, status: 'A' },
+        { id: 'TUN003', name: 'TuniLoon-3', lat: 34.6800, lon: 10.7000, alt: 0, temp: 25, status: 'L' },
+        { id: 'TUN004', name: 'TuniLoon-4', lat: 34.9000, lon: 10.9000, alt: 22000, temp: -50, status: 'A' },
     ];
     
     demos.forEach(d => {
@@ -275,10 +288,8 @@ function renderBalloonList() {
 // ============================================================
 
 function startDataPolling() {
-    // For demo: simulate balloon movement
     let counter = 0;
     state.updateInterval = setInterval(() => {
-        // Update existing balloons with slight movement
         Object.values(state.balloons).forEach(b => {
             if (b.latest && b.latest.latitude) {
                 const lat = b.latest.latitude + (Math.random() - 0.5) * 0.001;
@@ -322,7 +333,7 @@ if (document.readyState === 'loading') {
     init();
 }
 
-// Make functions globally accessible for inline onclick
+// Make functions globally accessible
 window.addDemoBalloons = addDemoBalloons;
 window.resetMapView = resetMapView;
 window.toggleAllPaths = toggleAllPaths;

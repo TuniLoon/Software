@@ -54,6 +54,7 @@ function init() {
     console.log('[Dashboard] Initializing...');
     initMap();
     initGraphs();
+    initWeather();
     initEventListeners();
     startDataPolling();
     updateStatus(true);
