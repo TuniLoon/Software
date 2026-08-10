@@ -1,0 +1,171 @@
+/* Multi-Balloon Dashboard Styles */
+
+.multi-container {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    padding: 16px;
+    height: calc(100vh - 80px);
+}
+
+.multi-sidebar {
+    width: 320px;
+    min-width: 250px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.multi-sidebar-header {
+    padding: 16px 18px;
+    background: var(--card-header-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.multi-sidebar-header .badge {
+    font-size: 12px;
+    font-weight: 400;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: var(--bg-primary);
+    margin-left: 8px;
+}
+
+.multi-balloon-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.multi-balloon-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 4px;
+    border-left: 4px solid transparent;
+}
+
+.multi-balloon-item:hover {
+    background: var(--bg-primary);
+}
+
+.multi-balloon-item.active {
+    background: var(--bg-primary);
+}
+
+.multi-balloon-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.multi-balloon-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.multi-balloon-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.multi-balloon-altitude {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.multi-balloon-status {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.status-online { background: rgba(0,200,83,0.15); color: #00c853; }
+.status-offline { background: rgba(255,23,68,0.15); color: #ff1744; }
+.status-error { background: rgba(244,67,54,0.15); color: #f44336; }
+
+.balloon-status-A { background: rgba(33,150,243,0.15); color: #2196f3; }
+.balloon-status-D { background: rgba(255,152,0,0.15); color: #ff9800; }
+.balloon-status-L { background: rgba(76,175,80,0.15); color: #4caf50; }
+.balloon-status-E { background: rgba(244,67,54,0.15); color: #f44336; }
+
+.multi-map-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.multi-map {
+    flex: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.multi-map #map {
+    height: 100%;
+    width: 100%;
+}
+
+.multi-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.multi-controls button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+.multi-controls button:hover {
+    background: var(--bg-primary);
+}
+
+/* Balloon Detail Panel (popup) */
+.balloon-detail-popup {
+    padding: 10px;
+    min-width: 200px;
+}
+
+.balloon-detail-popup .title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+.balloon-detail-popup .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #eee;
+}
+
+@media (max-width: 768px) {
+    .multi-container {
+        flex-direction: column;
+    }
+    .multi-sidebar {
+        width: 100%;
+        max-height: 200px;
+    }
+}

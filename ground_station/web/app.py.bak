@@ -1,6 +1,6 @@
 """
 app.py
-Flask web server with cloud integration, ML anomaly detection, flight analysis, and multi‑balloon support.
+Flask web server with cloud integration and ML anomaly detection.
 """
 
 import sys
@@ -12,9 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import time
 import threading
-import json
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request
 
 from ground_station.src.Decoder import TelemetryDecoder
 from ground_station.src.Logger import TelemetryLogger
@@ -38,6 +37,10 @@ telemetry_data = {
         'sondehub': 'disabled'
     }
 }
+import json
+with open('config/ml_config.json') as f:
+    ml_config = json.load(f)
+confidence_threshold = ml_config.get('thresholds', {}).get('confidence', 0.7)
 
 # Initialize components
 decoder = TelemetryDecoder()
@@ -63,8 +66,6 @@ else:
 
 MAX_HISTORY = 1000
 
-
-# ------------------------- Main Routes -------------------------
 
 @app.route('/')
 def index():
@@ -136,70 +137,6 @@ def debug():
     })
 
 
-# ------------------------- Analysis Routes (Sprint 8) -------------------------
-
-@app.route('/analysis')
-def analysis_page():
-    return render_template('analysis.html')
-
-
-@app.route('/api/analysis/latest')
-def analysis_latest():
-    if not telemetry_data['history']:
-        return jsonify({'error': 'No flight data available'}), 404
-    
-    from analysis.flight_analyzer import FlightAnalyzer
-    from analysis.wind_estimator import WindEstimator
-    from analysis.report_generator import ReportGenerator
-    
-    data = telemetry_data['history']
-    analyzer = FlightAnalyzer(data)
-    metrics = analyzer.get_metrics()
-    
-    wind = WindEstimator(data)
-    wind_speed, wind_direction = wind.get_wind()
-    
-    report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
-    report_md = report_gen.generate_markdown()
-    
-    return jsonify({
-        'metrics': metrics,
-        'wind_speed': wind_speed,
-        'wind_direction': wind_direction,
-        'report_markdown': report_md
-    })
-
-
-@app.route('/api/analysis/report/download')
-def analysis_report_download():
-    if not telemetry_data['history']:
-        return jsonify({'error': 'No flight data'}), 404
-    
-    from analysis.flight_analyzer import FlightAnalyzer
-    from analysis.wind_estimator import WindEstimator
-    from analysis.report_generator import ReportGenerator
-    
-    data = telemetry_data['history']
-    analyzer = FlightAnalyzer(data)
-    metrics = analyzer.get_metrics()
-    wind = WindEstimator(data)
-    wind_speed, wind_direction = wind.get_wind()
-    
-    report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
-    filename = report_gen.save_markdown()
-    
-    return send_file(filename, as_attachment=True)
-
-
-# ------------------------- Multi-Balloon Routes (Sprint 9) -------------------------
-
-@app.route('/multi')
-def multi_balloon():
-    return render_template('multi_index.html')
-
-
-# ------------------------- Payload Processing -------------------------
-
 def process_packet(packet_string: str):
     global telemetry_data
     try:
@@ -211,9 +148,11 @@ def process_packet(packet_string: str):
         if 'timestamp' not in data:
             data['timestamp'] = datetime.now().isoformat()
 
-        # Anomaly detection with confidence threshold
+        # --- Anomaly detection with confidence threshold ---
         if anomaly_detector.is_initialized:
             anomaly_result = anomaly_detector.process_telemetry(data)
+
+            # Only mark as anomaly if both is_anomaly and confidence > threshold (0.7)
             confidence_threshold = 0.7
             is_anomaly = anomaly_result['is_anomaly'] and anomaly_result['confidence'] > confidence_threshold
 
@@ -252,21 +191,13 @@ def process_packet(packet_string: str):
             app.logger.error(f"MQTT error: {e}")
             telemetry_data['cloud_status']['mqtt'] = 'error'
 
-        # Telegram status alerts – removed check_and_alert (method doesn't exist)
-        # If you want status updates, use send_message directly.
+        # Telegram status alerts (separate from anomaly alerts)
         try:
             if telegram_bot.enabled:
-                # Optional: send a periodic status update (e.g., every 50 packets)
-                if telemetry_data['packet_count'] % 50 == 0:
-                    telegram_bot.send_message(
-                        f"📡 <b>TuniLoon Update</b>\n\n"
-                        f"Alt: {data['altitude']:.0f}m\n"
-                        f"Status: {data.get('status_description', 'Unknown')}\n"
-                        f"Temp: {data['temperature']:.1f}°C"
-                    )
+                telegram_bot.check_and_alert(data)
                 telemetry_data['cloud_status']['telegram'] = 'enabled'
         except Exception as e:
-            app.logger.error(f"Telegram error: {e}")
+            app.logger.error(f"Telegram check error: {e}")
             telemetry_data['cloud_status']['telegram'] = 'error'
 
         # Sondehub
@@ -327,7 +258,7 @@ def run_mock_consumer_thread():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("  TuniLoon Ground Station with ML, Analysis & Multi-Balloon")
+    print("  TuniLoon Ground Station with ML Anomaly Detection")
     print("  http://localhost:5000")
     print("=" * 60)
     print()
@@ -337,3 +268,59 @@ if __name__ == '__main__':
     
     run_mock_consumer_thread()
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# --- Sprint 8: Analysis Routes ---
+
+@app.route('/api/analysis/latest')
+def analysis_latest():
+    """Run analysis on the current flight data."""
+    if not telemetry_data['history']:
+        return jsonify({'error': 'No flight data available'}), 404
+    
+    from analysis.flight_analyzer import FlightAnalyzer
+    from analysis.wind_estimator import WindEstimator
+    from analysis.report_generator import ReportGenerator
+    
+    data = telemetry_data['history']
+    analyzer = FlightAnalyzer(data)
+    metrics = analyzer.get_metrics()
+    
+    wind = WindEstimator(data)
+    wind_speed, wind_direction = wind.get_wind()
+    
+    report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
+    report_md = report_gen.generate_markdown()
+    
+    return jsonify({
+        'metrics': metrics,
+        'wind_speed': wind_speed,
+        'wind_direction': wind_direction,
+        'report_markdown': report_md
+    })
+
+@app.route('/api/analysis/report/download')
+def analysis_report_download():
+    """Download report as a Markdown file."""
+    if not telemetry_data['history']:
+        return jsonify({'error': 'No flight data'}), 404
+    
+    from analysis.flight_analyzer import FlightAnalyzer
+    from analysis.wind_estimator import WindEstimator
+    from analysis.report_generator import ReportGenerator
+    
+    data = telemetry_data['history']
+    analyzer = FlightAnalyzer(data)
+    metrics = analyzer.get_metrics()
+    wind = WindEstimator(data)
+    wind_speed, wind_direction = wind.get_wind()
+    
+    report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
+    filename = report_gen.save_markdown()
+    
+    from flask import send_file
+    return send_file(filename, as_attachment=True)
+
+@app.route('/analysis')
+def analysis_page():
+    """Render the analysis dashboard."""
+    return render_template('analysis.html')

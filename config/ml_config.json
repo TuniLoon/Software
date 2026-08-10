@@ -13,7 +13,7 @@
     },
     "thresholds": {
         "anomaly_score": 0.1,
-        "confidence": 0.7
+        "confidence": 0.3
     },
     "alerts": {
         "telegram": true,

@@ -133,27 +133,44 @@ function initGraphs() {
 
 function updateGraphs(data) {
     if (!data || data.length === 0) return;
+    
     const times = data.map(d => new Date(d.timestamp).toLocaleTimeString());
     const altitudes = data.map(d => d.altitude || 0);
     const temperatures = data.map(d => d.temperature || 0);
-    // Update main traces
-    Plotly.restyle('altitude-graph', { x: [times], y: [altitudes] });
-    Plotly.restyle('temperature-graph', { x: [times], y: [temperatures] });
-    // Max altitude, min/max temp
-    const maxAlt = Math.max(...altitudes);
-    DOM.graphMaxAlt.textContent = maxAlt.toFixed(0);
-    const minTemp = Math.min(...temperatures);
-    const maxTemp = Math.max(...temperatures);
-    DOM.graphMinTemp.textContent = minTemp.toFixed(1);
-    DOM.graphMaxTemp.textContent = maxTemp.toFixed(1);
-
-    // --- Anomaly markers on altitude graph ---
-    // Find indices where anomaly is true
+    
+    // --- Update main altitude trace (always blue) ---
+    Plotly.restyle('altitude-graph', {
+        x: [times],
+        y: [altitudes],
+        line: { color: '#2196f3' }  // ensure blue
+    });
+    
+    // --- Update temperature trace (always orange) ---
+    Plotly.restyle('temperature-graph', {
+        x: [times],
+        y: [temperatures],
+        line: { color: '#ff9800' }
+    });
+    
+    // --- Add anomaly markers as a separate scatter trace ---
     const anomalyIndices = data.map((d, i) => d.anomaly ? i : null).filter(i => i !== null);
+    
+    // Remove any existing anomaly trace (named 'Anomaly')
+    const altDiv = document.getElementById('altitude-graph');
+    Plotly.react(altDiv, [{
+        name: 'Altitude',
+        x: times,
+        y: altitudes,
+        mode: 'lines+markers',
+        type: 'scatter',
+        line: { color: '#2196f3', width: 2 },
+        marker: { color: '#2196f3', size: 4 }
+    }], state.altitudeGraph.layout);
+    
+    // Add anomaly scatter trace if any anomalies exist
     if (anomalyIndices.length > 0) {
         const anomalyTimes = anomalyIndices.map(i => times[i]);
         const anomalyAlts = anomalyIndices.map(i => altitudes[i]);
-        // Add a new trace for anomalies (scatter markers)
         Plotly.addTraces('altitude-graph', {
             x: anomalyTimes,
             y: anomalyAlts,
@@ -162,21 +179,6 @@ function updateGraphs(data) {
             marker: { color: 'red', size: 12, symbol: 'x' },
             name: 'Anomaly'
         });
-    } else {
-        // Remove any existing anomaly trace (if present)
-        // We can find traces with name 'Anomaly' and remove them
-        Plotly.deleteTraces('altitude-graph', [1]); // Assuming it's the second trace; safer: find by name
-        // Better: loop through traces and remove if name === 'Anomaly'
-        const altDiv = document.getElementById('altitude-graph');
-        Plotly.react(altDiv, [{
-            name: 'Altitude',
-            x: times,
-            y: altitudes,
-            mode: 'lines+markers',
-            type: 'scatter',
-            line: { color: '#2196f3', width: 2 },
-            marker: { color: '#2196f3', size: 4 }
-        }], state.altitudeGraph.layout);
     }
 }
 

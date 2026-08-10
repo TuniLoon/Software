@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuniLoon Multi-Balloon Tracker</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='multi_balloon.css') }}">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1><i class="fas fa-balloons"></i> TuniLoon Multi-Tracker</h1>
+                <span id="status-badge" class="badge online">● Online</span>
+            </div>
+            <div class="header-right">
+                <span id="balloon-count">Balloons: 0</span>
+                <button id="theme-toggle" title="Toggle theme"><i class="fas fa-moon"></i></button>
+                <a href="/" title="Single balloon view" style="color: var(--text-secondary);"><i class="fas fa-arrow-left"></i></a>
+            </div>
+        </header>
+        
+        <div class="multi-container">
+            <!-- Sidebar -->
+            <div class="multi-sidebar">
+                <div class="multi-sidebar-header">
+                    Balloons <span class="badge" id="sidebar-count">0</span>
+                    <button onclick="addDemoBalloons()" style="float:right; background: var(--bg-primary); border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 12px;">+ Demo</button>
+                </div>
+                <div class="multi-balloon-list" id="balloon-list">
+                    <div style="padding:20px; text-align:center; color: var(--text-secondary);">
+                        No balloons active<br>
+                        <small>Click "Add Demo" or wait for real data</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Map Area -->
+            <div class="multi-map-area">
+                <div class="multi-controls">
+                    <button onclick="resetMapView()"><i class="fas fa-home"></i> Reset View</button>
+                    <button onclick="toggleAllPaths()"><i class="fas fa-route"></i> Toggle Paths</button>
+                    <button onclick="clearAllBalloons()"><i class="fas fa-trash"></i> Clear All</button>
+                </div>
+                <div class="multi-map">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='multi_dashboard.js') }}"></script>
+</body>
+</html>

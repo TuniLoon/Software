@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TuniLoon Flight Analysis</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: var(--bg-primary); color: var(--text-primary); }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: var(--text-primary); }
+        .card { background: var(--bg-card); padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .metric { text-align: center; }
+        .metric-value { font-size: 24px; font-weight: bold; }
+        .metric-label { font-size: 14px; color: var(--text-secondary); }
+        .report-box { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; font-family: monospace; }
+        .btn { background: #ff6b35; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .btn:hover { background: #e55a2b; }
+        .btn-secondary { background: #555; }
+        .btn-secondary:hover { background: #444; }
+        .status { padding: 5px 10px; border-radius: 20px; }
+        .status-loading { background: #f0ad4e; color: #fff; }
+        .status-ready { background: #5cb85c; color: #fff; }
+        .status-error { background: #d9534f; color: #fff; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Flight Analysis</h1>
+    <div id="status" class="status status-loading">Loading...</div>
+    <div id="analysis-content">
+        <div class="card" id="metrics-card" style="display:none;">
+            <h2>Flight Metrics</h2>
+            <div class="metric-grid" id="metrics-grid"></div>
+        </div>
+        <div class="card" id="wind-card" style="display:none;">
+            <h2>Wind Estimation</h2>
+            <div class="metric-grid" id="wind-grid"></div>
+        </div>
+        <div class="card" id="report-card" style="display:none;">
+            <h2>Report</h2>
+            <button class="btn" onclick="downloadReport()">📥 Download Report (Markdown)</button>
+            <div class="report-box" id="report-content"></div>
+        </div>
+    </div>
+</div>
+<script>
+    async function loadAnalysis() {
+        const status = document.getElementById('status');
+        try {
+            const response = await fetch('/api/analysis/latest');
+            if (!response.ok) throw new Error('No flight data');
+            const data = await response.json();
+            status.textContent = '✅ Analysis Ready';
+            status.className = 'status status-ready';
+            displayMetrics(data.metrics);
+            displayWind(data.wind_speed, data.wind_direction);
+            displayReport(data.report_markdown);
+        } catch (e) {
+            status.textContent = '❌ ' + e.message;
+            status.className = 'status status-error';
+        }
+    }
+    function displayMetrics(metrics) {
+        document.getElementById('metrics-card').style.display = 'block';
+        const grid = document.getElementById('metrics-grid');
+        const pairs = [
+            ['Duration', metrics.duration_hours.toFixed(2) + ' h'],
+            ['Max Altitude', metrics.max_altitude.toFixed(0) + ' m'],
+            ['Min Altitude', metrics.min_altitude.toFixed(0) + ' m'],
+            ['Max Temp', metrics.max_temperature.toFixed(1) + ' °C'],
+            ['Min Temp', metrics.min_temperature.toFixed(1) + ' °C'],
+            ['Avg Ascent Rate', metrics.avg_ascent_rate.toFixed(1) + ' m/s'],
+            ['Avg Descent Rate', metrics.avg_descent_rate.toFixed(1) + ' m/s'],
+            ['Total Distance', metrics.total_distance_km.toFixed(2) + ' km'],
+            ['Landing Location', metrics.landing_location[0].toFixed(4) + ', ' + metrics.landing_location[1].toFixed(4)]
+        ];
+        grid.innerHTML = pairs.map(([label, value]) =>
+            `<div class="metric"><div class="metric-value">${value}</div><div class="metric-label">${label}</div></div>`
+        ).join('');
+    }
+    function displayWind(speed, direction) {
+        document.getElementById('wind-card').style.display = 'block';
+        const grid = document.getElementById('wind-grid');
+        grid.innerHTML = `
+            <div class="metric"><div class="metric-value">${speed.toFixed(1)} m/s</div><div class="metric-label">Wind Speed</div></div>
+            <div class="metric"><div class="metric-value">${direction.toFixed(1)}°</div><div class="metric-label">Wind Direction</div></div>
+        `;
+    }
+    function displayReport(markdown) {
+        document.getElementById('report-card').style.display = 'block';
+        document.getElementById('report-content').textContent = markdown;
+    }
+    function downloadReport() {
+        window.location.href = '/api/analysis/report/download';
+    }
+    loadAnalysis();
+</script>
+</body>
+</html>
