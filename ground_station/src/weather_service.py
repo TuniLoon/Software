@@ -6,7 +6,7 @@ from pathlib import Path
 
 class WeatherService:
     def __init__(self, api_key=None, cache_file="data/weather_cache.json"):
-        self.api_key = api_key or os.getenv("OPENWEATHER_API_KEY", "c9921e2ee89c16a420f00d536364f2f6")
+        self.api_key = api_key or os.getenv("OPENWEATHER_API_KEY", "YOUR_API_KEY")
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
         self.cache_duration = 600  # 10 minutes
@@ -76,7 +76,7 @@ class WeatherService:
         cache_key = f"forecast_{lat:.4f}_{lon:.4f}_{cnt}"
         if self._is_cache_valid(cache_key):
             return self.cache[cache_key]['data']
-        if self.api_key == "c9921e2ee89c16a420f00d536364f2f6":
+        if self.api_key == "YOUR API KEY":
             from datetime import timedelta
             mock = {
                 'list': [
