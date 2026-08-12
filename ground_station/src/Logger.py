@@ -109,10 +109,7 @@ if __name__ == "__main__":
         'thermal_avg': 28.7,
         'checksum': 5977,
         'status': 'A',
-        'status_description': 'Ascent',
-        'anomaly': True,
-        'anomaly_score': -0.71,
-        'anomaly_confidence': 1.0
+        'status_description': 'Ascent'
     }
     logger.log(test_data)
     logger.save_json()

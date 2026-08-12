@@ -1,6 +1,7 @@
 """
 app.py
-Flask web server with cloud integration, ML anomaly detection, flight analysis, and multi‑balloon support.
+Flask web server with cloud integration, ML anomaly detection, flight analysis,
+multi‑balloon support, flight planner, export, and real‑time toggle.
 """
 
 import sys
@@ -12,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import time
 import threading
-import json
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, send_file
 
@@ -21,11 +21,13 @@ from ground_station.src.Logger import TelemetryLogger
 from cloud.mqtt_publisher import MQTTPublisher
 from cloud.telegram_bot import TelegramBot
 from cloud.sondehub_uploader import SondehubUploader
+from ground_station.src.weather_service import WeatherService
 from ml.real_time_detector import RealTimeAnomalyDetector
 
+# ------------------------- App Initialization -------------------------
 app = Flask(__name__)
 
-# Global data store
+# ------------------------- Global Variables -------------------------
 telemetry_data = {
     'latest': None,
     'history': [],
@@ -39,14 +41,17 @@ telemetry_data = {
     }
 }
 
-# Initialize components
+simulation_real_time = False
+
+# ------------------------- Component Initialization -------------------------
 decoder = TelemetryDecoder()
 logger = TelemetryLogger(data_dir="data/", filename="web_dashboard")
 mqtt_publisher = MQTTPublisher()
 telegram_bot = TelegramBot()
 sondehub = SondehubUploader()
+weather_service = WeatherService()
 
-# Initialize anomaly detector – load trained model if available
+# Anomaly detector
 anomaly_detector = RealTimeAnomalyDetector()
 model_path = Path(__file__).parent.parent.parent / "ml/models/anomaly_model.pkl"
 if model_path.exists():
@@ -63,22 +68,18 @@ else:
 
 MAX_HISTORY = 1000
 
-
 # ------------------------- Main Routes -------------------------
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/api/telemetry/latest')
 def get_latest():
     try:
         return jsonify(telemetry_data['latest'])
     except Exception as e:
-        app.logger.error(f"Error in /api/telemetry/latest: {e}\n{traceback.format_exc()}")
+        app.logger.error(f"Error in /api/telemetry/latest: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/api/telemetry/history')
 def get_history():
@@ -86,9 +87,8 @@ def get_history():
         limit = request.args.get('limit', 100, type=int)
         return jsonify(telemetry_data['history'][-limit:])
     except Exception as e:
-        app.logger.error(f"Error in /api/telemetry/history: {e}\n{traceback.format_exc()}")
+        app.logger.error(f"Error in /api/telemetry/history: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/api/telemetry/stats')
 def get_stats():
@@ -106,9 +106,8 @@ def get_stats():
             stats['current_altitude'] = altitudes[-1] if altitudes else 0
         return jsonify(stats)
     except Exception as e:
-        app.logger.error(f"Error in /api/telemetry/stats: {e}\n{traceback.format_exc()}")
+        app.logger.error(f"Error in /api/telemetry/stats: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/api/telemetry/clear')
 def clear_data():
@@ -120,11 +119,9 @@ def clear_data():
     anomaly_detector.reset()
     return jsonify({'status': 'cleared'})
 
-
 @app.route('/api/cloud/status')
 def cloud_status():
     return jsonify(telemetry_data['cloud_status'])
-
 
 @app.route('/api/debug')
 def debug():
@@ -135,33 +132,25 @@ def debug():
         'error_count': telemetry_data['error_count']
     })
 
-
 # ------------------------- Analysis Routes (Sprint 8) -------------------------
-
 @app.route('/analysis')
 def analysis_page():
     return render_template('analysis.html')
-
 
 @app.route('/api/analysis/latest')
 def analysis_latest():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data available'}), 404
-    
     from analysis.flight_analyzer import FlightAnalyzer
     from analysis.wind_estimator import WindEstimator
     from analysis.report_generator import ReportGenerator
-    
     data = telemetry_data['history']
     analyzer = FlightAnalyzer(data)
     metrics = analyzer.get_metrics()
-    
     wind = WindEstimator(data)
     wind_speed, wind_direction = wind.get_wind()
-    
     report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
     report_md = report_gen.generate_markdown()
-    
     return jsonify({
         'metrics': metrics,
         'wind_speed': wind_speed,
@@ -169,165 +158,82 @@ def analysis_latest():
         'report_markdown': report_md
     })
 
-
 @app.route('/api/analysis/report/download')
 def analysis_report_download():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data'}), 404
-    
     from analysis.flight_analyzer import FlightAnalyzer
     from analysis.wind_estimator import WindEstimator
     from analysis.report_generator import ReportGenerator
-    
     data = telemetry_data['history']
     analyzer = FlightAnalyzer(data)
     metrics = analyzer.get_metrics()
     wind = WindEstimator(data)
     wind_speed, wind_direction = wind.get_wind()
-    
     report_gen = ReportGenerator(metrics, wind_speed, wind_direction)
     filename = report_gen.save_markdown()
-    
     return send_file(filename, as_attachment=True)
 
-
 # ------------------------- Multi-Balloon Routes (Sprint 9) -------------------------
-
 @app.route('/multi')
 def multi_balloon():
     return render_template('multi_index.html')
 
+# ------------------------- Flight Planner Routes (Sprint 11) -------------------------
+@app.route('/planner')
+def planner():
+    return render_template('planner.html')
 
-# ------------------------- Payload Processing -------------------------
-
-def process_packet(packet_string: str):
-    global telemetry_data
+@app.route('/api/planner/predict', methods=['POST'])
+def planner_predict():
+    from analysis.flight_planner import FlightPlanner
+    data = request.get_json()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    launch_time_str = data.get('launch_time')
+    if lat is None or lon is None or launch_time_str is None:
+        return jsonify({'error': 'Missing parameters'}), 400
     try:
-        data = decoder.decode(packet_string)
-        if data is None:
-            telemetry_data['error_count'] += 1
-            return
+        launch_time = datetime.fromisoformat(launch_time_str)
+    except ValueError:
+        return jsonify({'error': 'Invalid datetime format'}), 400
+    planner = FlightPlanner(weather_service)
+    result = planner.predict_landing(lat, lon, launch_time)
+    return jsonify(result)
 
-        if 'timestamp' not in data:
-            data['timestamp'] = datetime.now().isoformat()
+# ------------------------- Export Routes (Sprint 12) -------------------------
+@app.route('/api/export/kml')
+def export_kml():
+    if not telemetry_data['history']:
+        return jsonify({'error': 'No flight data'}), 404
+    from analysis.export_handlers import to_kml
+    traj = telemetry_data['history']
+    kml = to_kml(traj)
+    return app.response_class(kml, mimetype='application/vnd.google-earth.kml+xml',
+                              headers={'Content-Disposition': 'attachment;filename=flight.kml'})
 
-        # Anomaly detection with confidence threshold
-        if anomaly_detector.is_initialized:
-            anomaly_result = anomaly_detector.process_telemetry(data)
-            confidence_threshold = 0.7
-            is_anomaly = anomaly_result['is_anomaly'] and anomaly_result['confidence'] > confidence_threshold
+@app.route('/api/export/gpx')
+def export_gpx():
+    if not telemetry_data['history']:
+        return jsonify({'error': 'No flight data'}), 404
+    from analysis.export_handlers import to_gpx
+    traj = telemetry_data['history']
+    gpx = to_gpx(traj)
+    return app.response_class(gpx, mimetype='application/gpx+xml',
+                              headers={'Content-Disposition': 'attachment;filename=flight.gpx'})
 
-            data['anomaly'] = bool(is_anomaly)
-            data['anomaly_score'] = float(anomaly_result['anomaly_score'])
-            data['anomaly_confidence'] = float(anomaly_result['confidence'])
+@app.route('/api/sim/toggle', methods=['POST'])
+def toggle_simulation_speed():
+    global simulation_real_time
+    data = request.get_json()
+    if data is None:
+        return jsonify({'error': 'Invalid JSON'}), 400
+    real_time = data.get('real_time', False)
+    simulation_real_time = real_time
+    print(f"[INFO] Simulation mode set to {'real-time' if real_time else 'fast'}")
+    return jsonify({'status': 'ok', 'real_time': real_time})
 
-            if anomaly_result['alert_triggered']:
-                print(f"🚨 ANOMALY detected in packet {telemetry_data['packet_count']}")
-                if telegram_bot.enabled:
-                    telegram_bot.send_message(
-                        f"🚨 <b>Anomaly Detected!</b>\n\n"
-                        f"Alt: {data['altitude']:.0f}m, Temp: {data['temperature']:.1f}°C\n"
-                        f"Score: {data['anomaly_score']:.2f}, Confidence: {data['anomaly_confidence']:.2f}"
-                    )
-        else:
-            data['anomaly'] = False
-            data['anomaly_score'] = 0.0
-            data['anomaly_confidence'] = 0.0
-
-        telemetry_data['latest'] = data
-        telemetry_data['packet_count'] += 1
-        telemetry_data['history'].append(data)
-
-        if len(telemetry_data['history']) > MAX_HISTORY:
-            telemetry_data['history'] = telemetry_data['history'][-MAX_HISTORY:]
-
-        logger.log(data)
-
-        # MQTT
-        try:
-            if mqtt_publisher.connected:
-                mqtt_publisher.publish(data)
-                telemetry_data['cloud_status']['mqtt'] = 'connected'
-        except Exception as e:
-            app.logger.error(f"MQTT error: {e}")
-            telemetry_data['cloud_status']['mqtt'] = 'error'
-
-        # Telegram status alerts – removed check_and_alert (method doesn't exist)
-        # If you want status updates, use send_message directly.
-        try:
-            if telegram_bot.enabled:
-                # Optional: send a periodic status update (e.g., every 50 packets)
-                if telemetry_data['packet_count'] % 50 == 0:
-                    telegram_bot.send_message(
-                        f"📡 <b>TuniLoon Update</b>\n\n"
-                        f"Alt: {data['altitude']:.0f}m\n"
-                        f"Status: {data.get('status_description', 'Unknown')}\n"
-                        f"Temp: {data['temperature']:.1f}°C"
-                    )
-                telemetry_data['cloud_status']['telegram'] = 'enabled'
-        except Exception as e:
-            app.logger.error(f"Telegram error: {e}")
-            telemetry_data['cloud_status']['telegram'] = 'error'
-
-        # Sondehub
-        try:
-            if sondehub.enabled:
-                sondehub.upload(data)
-                telemetry_data['cloud_status']['sondehub'] = 'enabled'
-        except Exception as e:
-            app.logger.error(f"Sondehub error: {e}")
-            telemetry_data['cloud_status']['sondehub'] = 'error'
-
-        print(f"[DATA] Packet {telemetry_data['packet_count']}: Alt={data['altitude']}m, Status={data['status']}")
-
-    except Exception as e:
-        app.logger.error(f"Error processing packet: {e}\n{traceback.format_exc()}")
-
-
-def run_mock_consumer():
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).parent.parent.parent))
-    
-    from payload_simulator.src.MockPayload import MockPayload
-    
-    run_mock_consumer.running = True
-    packet_interval = 1
-    
-    print("[INFO] Mock consumer started.")
-    
-    payload = MockPayload(continuous=True)
-    payload.generate_flight()
-    mqtt_publisher.connect()
-    
-    while run_mock_consumer.running:
-        try:
-            data = payload.get_next_packet()
-            if data is None:
-                payload.generate_flight()
-                telegram_bot.reset_state()
-                anomaly_detector.reset()
-                continue
-            
-            packet = payload.packer.pack_from_dict(data)
-            process_packet(packet)
-            time.sleep(packet_interval)
-        except Exception as e:
-            app.logger.error(f"Mock consumer error: {e}\n{traceback.format_exc()}")
-            time.sleep(1)
-
-
-def run_mock_consumer_thread():
-    run_mock_consumer.running = True
-    thread = threading.Thread(target=run_mock_consumer)
-    thread.daemon = True
-    thread.start()
-    return thread
 # ------------------------- Weather Routes (Sprint 10) -------------------------
-
-from ground_station.src.weather_service import WeatherService
-weather_service = WeatherService()  # use env var for API key
-
 @app.route('/api/weather/current')
 def weather_current():
     lat = request.args.get('lat', type=float)
@@ -362,7 +268,148 @@ def weather_wind():
         return jsonify(wind)
     return jsonify({'error': 'Wind data unavailable'}), 500
 
+# ------------------------- Payload Processing -------------------------
+def process_packet(packet_string: str):
+    global telemetry_data
+    try:
+        data = decoder.decode(packet_string)
+        if data is None:
+            telemetry_data['error_count'] += 1
+            return
+        if 'timestamp' not in data:
+            data['timestamp'] = datetime.now().isoformat()
+        
+        # Anomaly detection with confidence threshold
+        if anomaly_detector.is_initialized:
+            anomaly_result = anomaly_detector.process_telemetry(data)
+            confidence_threshold = 0.7
+            is_anomaly = anomaly_result['is_anomaly'] and anomaly_result['confidence'] > confidence_threshold
+            data['anomaly'] = bool(is_anomaly)
+            data['anomaly_score'] = float(anomaly_result['anomaly_score'])
+            data['anomaly_confidence'] = float(anomaly_result['confidence'])
+            if anomaly_result['alert_triggered']:
+                print(f"🚨 ANOMALY detected in packet {telemetry_data['packet_count']}")
+                if telegram_bot.enabled:
+                    telegram_bot.send_message(
+                        f"🚨 <b>Anomaly Detected!</b>\n\n"
+                        f"Alt: {data['altitude']:.0f}m, Temp: {data['temperature']:.1f}°C\n"
+                        f"Score: {data['anomaly_score']:.2f}, Confidence: {data['anomaly_confidence']:.2f}"
+                    )
+        else:
+            data['anomaly'] = False
+            data['anomaly_score'] = 0.0
+            data['anomaly_confidence'] = 0.0
+        
+        telemetry_data['latest'] = data
+        telemetry_data['packet_count'] += 1
+        telemetry_data['history'].append(data)
+        if len(telemetry_data['history']) > MAX_HISTORY:
+            telemetry_data['history'] = telemetry_data['history'][-MAX_HISTORY:]
+        logger.log(data)
+        print(f"[DEBUG] Logging packet to CSV: {data.get('altitude', '?')}m")
+        # MQTT
+        try:
+            if mqtt_publisher.connected:
+                mqtt_publisher.publish(data)
+                telemetry_data['cloud_status']['mqtt'] = 'connected'
+        except Exception as e:
+            app.logger.error(f"MQTT error: {e}")
+            telemetry_data['cloud_status']['mqtt'] = 'error'
+        
+        # Telegram (status only)
+        try:
+            if telegram_bot.enabled:
+                if telemetry_data['packet_count'] % 50 == 0:
+                    telegram_bot.send_message(
+                        f"📡 <b>TuniLoon Update</b>\n\n"
+                        f"Alt: {data['altitude']:.0f}m\n"
+                        f"Status: {data.get('status_description', 'Unknown')}\n"
+                        f"Temp: {data['temperature']:.1f}°C"
+                    )
+                telemetry_data['cloud_status']['telegram'] = 'enabled'
+        except Exception as e:
+            app.logger.error(f"Telegram error: {e}")
+            telemetry_data['cloud_status']['telegram'] = 'error'
+        
+        # Sondehub
+        try:
+            if sondehub.enabled:
+                sondehub.upload(data)
+                telemetry_data['cloud_status']['sondehub'] = 'enabled'
+        except Exception as e:
+            app.logger.error(f"Sondehub error: {e}")
+            telemetry_data['cloud_status']['sondehub'] = 'error'
+        
+        print(f"[DATA] Packet {telemetry_data['packet_count']}: Alt={data['altitude']}m, Status={data['status']}")
+    except Exception as e:
+        app.logger.error(f"Error processing packet: {e}\n{traceback.format_exc()}")
 
+# ------------------------- Mock Consumer -------------------------
+def run_mock_consumer():
+    global simulation_real_time
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    from payload_simulator.src.MockPayload import MockPayload
+    
+    run_mock_consumer.running = True
+    packet_interval = 1
+    print("[INFO] Mock consumer started.")
+    payload = MockPayload(continuous=True)
+    payload.generate_flight()
+    mqtt_publisher.connect()
+    
+    while run_mock_consumer.running:
+        try:
+            data = payload.get_next_packet()
+            if data is None:
+                payload.generate_flight()
+                telegram_bot.reset_state()
+                anomaly_detector.reset()
+                continue
+            packet = payload.packer.pack_from_dict(data)
+            process_packet(packet)
+            if simulation_real_time:
+                time.sleep(30)
+            else:
+                time.sleep(packet_interval)
+        except Exception as e:
+            app.logger.error(f"Mock consumer error: {e}\n{traceback.format_exc()}")
+            time.sleep(1)
+
+def run_mock_consumer_thread():
+    run_mock_consumer.running = True
+    thread = threading.Thread(target=run_mock_consumer)
+    thread.daemon = True
+    thread.start()
+    return thread
+# ------------------------- History Routes (Sprint 13) -------------------------
+
+@app.route('/history')
+def history_page():
+    return render_template('history.html')
+
+@app.route('/api/history/list')
+def history_list():
+    from analysis.historical_browser import HistoricalBrowser
+    browser = HistoricalBrowser()
+    flights = browser.list_flights()
+    return jsonify(flights)
+
+@app.route('/api/history/report/<flight_id>')
+def history_report(flight_id):
+    from analysis.historical_browser import HistoricalBrowser
+    from analysis.pdf_report_generator import PDFReportGenerator
+    browser = HistoricalBrowser()
+    data = browser.get_flight_data(flight_id)
+    if not data:
+        return jsonify({'error': 'Flight not found'}), 404
+    generator = PDFReportGenerator(data)
+    pdf_bytes = generator.generate()
+    return app.response_class(pdf_bytes, mimetype='application/pdf',
+                              headers={'Content-Disposition': f'attachment;filename=report_{flight_id}.pdf'})
+
+# ------------------------- Entry Point -------------------------
 if __name__ == '__main__':
     print("=" * 60)
     print("  TuniLoon Ground Station with ML, Analysis & Multi-Balloon")
@@ -372,6 +419,6 @@ if __name__ == '__main__':
     print("[INFO] Cloud integrations:")
     print(f"  - Telegram: {'enabled' if telegram_bot.enabled else 'disabled'}")
     print()
-    
     run_mock_consumer_thread()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)
+

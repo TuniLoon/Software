@@ -1,6 +1,5 @@
 /**
- * TuniLoon Dashboard JavaScript
- * Handles real-time updates, map, and graphs.
+ * TuniLoon Dashboard – Corrected Frontend
  */
 
 const CONFIG = {
@@ -50,11 +49,49 @@ const DOM = {
     clearBtn: document.getElementById('clear-btn')
 };
 
+function createProgressBar() {
+    // Remove any existing progress container
+    const old = document.getElementById('progress-container');
+    if (old) old.remove();
+
+    const container = document.createElement('div');
+    container.id = 'progress-container';
+    container.style.margin = '10px 16px';
+    container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
+            <span>Flight Progress</span>
+            <span id="progress-percent">0%</span>
+        </div>
+        <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
+            <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
+        </div>
+    `;
+    const statsBar = document.querySelector('.stats-bar');
+    if (statsBar) {
+        statsBar.parentNode.insertBefore(container, statsBar.nextSibling);
+    } else {
+        document.body.prepend(container);
+    }
+}
+
+function updateProgress(altitude) {
+    const maxAltitude = 30000;
+    const percent = Math.min((altitude / maxAltitude) * 100, 100);
+    const progressBar = document.getElementById('flight-progress');
+    const percentLabel = document.getElementById('progress-percent');
+    if (progressBar) {
+        progressBar.style.width = percent + '%';
+    }
+    if (percentLabel) {
+        percentLabel.textContent = Math.round(percent) + '%';
+    }
+}
+
 function init() {
     console.log('[Dashboard] Initializing...');
+    createProgressBar();
     initMap();
     initGraphs();
-    initWeather();
     initEventListeners();
     startDataPolling();
     updateStatus(true);
@@ -63,10 +100,10 @@ function init() {
 }
 
 function initMap() {
-    const center = [34.7400, 10.7600];
+    const center = [35.8276, 10.6402];
     state.map = L.map('map').setView(center, 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
+        attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(state.map);
     state.marker = L.circleMarker(center, {
@@ -134,29 +171,10 @@ function initGraphs() {
 
 function updateGraphs(data) {
     if (!data || data.length === 0) return;
-    
     const times = data.map(d => new Date(d.timestamp).toLocaleTimeString());
     const altitudes = data.map(d => d.altitude || 0);
     const temperatures = data.map(d => d.temperature || 0);
-    
-    // --- Update main altitude trace (always blue) ---
-    Plotly.restyle('altitude-graph', {
-        x: [times],
-        y: [altitudes],
-        line: { color: '#2196f3' }  // ensure blue
-    });
-    
-    // --- Update temperature trace (always orange) ---
-    Plotly.restyle('temperature-graph', {
-        x: [times],
-        y: [temperatures],
-        line: { color: '#ff9800' }
-    });
-    
-    // --- Add anomaly markers as a separate scatter trace ---
-    const anomalyIndices = data.map((d, i) => d.anomaly ? i : null).filter(i => i !== null);
-    
-    // Remove any existing anomaly trace (named 'Anomaly')
+
     const altDiv = document.getElementById('altitude-graph');
     Plotly.react(altDiv, [{
         name: 'Altitude',
@@ -167,8 +185,20 @@ function updateGraphs(data) {
         line: { color: '#2196f3', width: 2 },
         marker: { color: '#2196f3', size: 4 }
     }], state.altitudeGraph.layout);
-    
-    // Add anomaly scatter trace if any anomalies exist
+
+    Plotly.restyle('temperature-graph', {
+        x: [times],
+        y: [temperatures]
+    });
+
+    const maxAlt = Math.max(...altitudes);
+    DOM.graphMaxAlt.textContent = maxAlt.toFixed(0);
+    const minTemp = Math.min(...temperatures);
+    const maxTemp = Math.max(...temperatures);
+    DOM.graphMinTemp.textContent = minTemp.toFixed(1);
+    DOM.graphMaxTemp.textContent = maxTemp.toFixed(1);
+
+    const anomalyIndices = data.map((d, i) => d.anomaly ? i : null).filter(i => i !== null);
     if (anomalyIndices.length > 0) {
         const anomalyTimes = anomalyIndices.map(i => times[i]);
         const anomalyAlts = anomalyIndices.map(i => altitudes[i]);
@@ -199,13 +229,15 @@ function updateStats(data) {
     const statusText = statusMap[data.status] || data.status || '—';
     DOM.statStatus.textContent = statusText;
     DOM.statStatus.className = `stat-value status-badge status-${data.status || 'U'}`;
-    // Highlight if anomaly
     if (data.anomaly) {
         DOM.statStatus.style.backgroundColor = '#ffcccc';
         DOM.statStatus.textContent += ' ⚠️';
     } else {
         DOM.statStatus.style.backgroundColor = '';
     }
+
+    // Update progress bar
+    updateProgress(data.altitude);
 }
 
 function updateDetails(data) {
@@ -242,6 +274,7 @@ function startDataPolling() {
 async function fetchLatest() {
     try {
         const response = await fetch(`${CONFIG.API_BASE}/latest`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data && data.latitude && data.longitude) {
             state.latest = data;
@@ -250,6 +283,8 @@ async function fetchLatest() {
             updateMap(data.latitude, data.longitude);
             updatePacketCount(state.packetCounter + 1);
             updateStatus(true);
+        } else {
+            console.warn('[Dashboard] No valid data in latest response');
         }
     } catch (error) {
         console.error('[Dashboard] Error fetching latest:', error);
@@ -260,6 +295,7 @@ async function fetchLatest() {
 async function fetchHistory() {
     try {
         const response = await fetch(`${CONFIG.API_BASE}/history?limit=${CONFIG.MAX_HISTORY}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data && Array.isArray(data) && data.length > 0) {
             state.data = data;
@@ -273,6 +309,33 @@ async function fetchHistory() {
 function initEventListeners() {
     DOM.themeToggle.addEventListener('click', toggleTheme);
     DOM.clearBtn.addEventListener('click', clearData);
+
+    document.getElementById('export-kml')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = '/api/export/kml';
+    });
+    document.getElementById('export-gpx')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = '/api/export/gpx';
+    });
+
+    const speedBtn = document.getElementById('toggle-speed');
+    if (speedBtn) {
+        speedBtn.addEventListener('click', function() {
+            const isRealTime = this.classList.toggle('active');
+            fetch('/api/sim/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({real_time: isRealTime})
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Speed mode:', data.real_time ? 'real-time' : 'fast');
+                this.innerHTML = isRealTime ? '⏱️' : '⏩';
+            })
+            .catch(err => console.error('Toggle error:', err));
+        });
+    }
 }
 
 function toggleTheme() {
@@ -294,6 +357,7 @@ async function clearData() {
         }
         updateGraphs([]);
         updatePacketCount(0);
+        // Reset all stat elements
         DOM.statAltitude.textContent = '0 m';
         DOM.statLatitude.textContent = '0.0000';
         DOM.statLongitude.textContent = '0.0000';
@@ -315,6 +379,7 @@ async function clearData() {
         DOM.graphMaxAlt.textContent = '0';
         DOM.graphMinTemp.textContent = '0.0';
         DOM.graphMaxTemp.textContent = '0.0';
+        updateProgress(0);
         updateStatus(true);
     } catch (error) {
         console.error('[Dashboard] Error clearing data:', error);

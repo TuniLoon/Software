@@ -27,6 +27,10 @@
                 <span class="badge" id="status-badge">● Connecting...</span>
             </div>
             <div class="header-right">
+                <a href="/planner" title="Flight Planner" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-rocket"></i></a>
+                <a href="#" id="export-kml" title="Download KML" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> KML</a>
+                <a href="#" id="export-gpx" title="Download GPX" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> GPX</a>
+                <button id="toggle-speed" title="Toggle real-time mode" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-clock"></i></button>
                 <span id="packet-count">Packets: 0</span>
                 <button id="theme-toggle" title="Toggle theme">
                     <i class="fas fa-moon"></i>
@@ -62,6 +66,17 @@
             <div class="stat-card">
                 <span class="stat-label">Status</span>
                 <span class="stat-value status-badge" id="stat-status">—</span>
+            </div>
+        </div>
+
+        <!-- Progress Bar (single, dynamically updated) -->
+        <div id="progress-container" style="margin: 10px 16px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
+                <span>Flight Progress</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
+                <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
             </div>
         </div>
         
@@ -148,6 +163,6 @@
     
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
-<script src="{{ url_for('static', filename='weather.js') }}"></script>
+    <script src="{{ url_for('static', filename='weather.js') }}"></script>
 </body>
 </html>

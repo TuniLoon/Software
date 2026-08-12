@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuniLoon Flight Planner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='planner.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1><i class="fas fa-rocket"></i> Flight Planner</h1>
+                <span class="badge online">● Plan</span>
+            </div>
+            <div class="header-right">
+                <a href="/" title="Main Dashboard" style="color: var(--text-secondary);"><i class="fas fa-arrow-left"></i></a>
+            </div>
+        </header>
+
+        <div class="planner-container">
+            <!-- Sidebar -->
+            <div class="planner-sidebar">
+                <h2>Launch Parameters</h2>
+                <div class="control-group">
+                    <label>Launch Site</label>
+                    <input type="text" id="launch-coords" placeholder="Click on map or enter lat, lon" value="35.8276, 10.6402">
+                </div>
+                <div class="control-group">
+                    <label>Launch Date & Time (UTC)</label>
+                    <input type="datetime-local" id="launch-time">
+                </div>
+                <button class="btn-primary" id="simulate-btn"><i class="fas fa-play"></i> Simulate</button>
+
+                <div id="result-box" class="result-box" style="display:none;">
+                    <h3>Prediction</h3>
+                    <div class="result-item"><span class="label">Landing Lat</span><span class="value" id="landing-lat">—</span></div>
+                    <div class="result-item"><span class="label">Landing Lon</span><span class="value" id="landing-lon">—</span></div>
+                    <div class="result-item"><span class="label">Duration</span><span class="value" id="duration">—</span></div>
+                    <div class="result-item"><span class="label">Max Altitude</span><span class="value" id="max-alt">—</span></div>
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div class="planner-map">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='planner.js') }}"></script>
+</body>
+</html>
