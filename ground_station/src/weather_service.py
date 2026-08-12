@@ -111,7 +111,7 @@ class WeatherService:
             return self.cache[cache_key]['data']
         
         # If no real API key, return mock data that varies with location
-        if self.api_key == "YOUR_API_KEY":
+        if self.api_key == "c9921e2ee89c16a420f00d536364f2f6":
             from datetime import timedelta
             # Base wind speed and direction depend on lat/lon
             base_speed = 5 + (lat - 34) * 0.5 + (lon - 10) * 0.3
@@ -154,7 +154,7 @@ class WeatherService:
             return self.cache[cache_key]['data']
         
         # If no real API key, return mock data that varies with location
-        if self.api_key == "YOUR_API_KEY":
+        if self.api_key == "c9921e2ee89c16a420f00d536364f2f6":
             from datetime import timedelta
             # Base wind speed and direction depend on lat/lon
             base_speed = 5 + (lat - 34) * 0.5 + (lon - 10) * 0.3

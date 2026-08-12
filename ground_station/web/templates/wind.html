@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuniLoon Wind & Trajectory</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .wind-container { display: flex; flex-direction: row; gap: 20px; padding: 20px; height: calc(100vh - 80px); }
+        .wind-sidebar { width: 320px; background: var(--bg-card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; overflow-y: auto; }
+        .wind-map { flex: 1; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+        .wind-map #map { height: 100%; width: 100%; }
+        .wind-metric { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color); }
+        .wind-metric .label { color: var(--text-secondary); }
+        .wind-metric .value { font-weight: 600; }
+        .btn-predict { background: #ff6b35; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 12px; }
+        .btn-predict:hover { background: #e55a2b; }
+        .btn-predict:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: #555; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        .btn-secondary:hover { background: #666; }
+        .coord-input { display: flex; gap: 8px; margin: 8px 0; }
+        .coord-input input { flex: 1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1><i class="fas fa-wind"></i> Wind & Trajectory</h1>
+            </div>
+            <div class="header-right">
+                <a href="/" title="Main Dashboard" style="color: var(--text-secondary);"><i class="fas fa-arrow-left"></i></a>
+            </div>
+        </header>
+        <div class="wind-container">
+            <div class="wind-sidebar">
+                <h2>Current Wind</h2>
+                <div id="wind-info">
+                    <div class="wind-metric"><span class="label">Speed</span><span class="value" id="wind-speed">—</span></div>
+                    <div class="wind-metric"><span class="label">Direction</span><span class="value" id="wind-dir">—</span></div>
+                    <div class="wind-metric"><span class="label">Confidence</span><span class="value" id="wind-conf">—</span></div>
+                </div>
+                
+                <h2 style="margin-top:20px;">Start Position</h2>
+                <div class="coord-input">
+                    <input type="text" id="start-lat" placeholder="Latitude" value="35.8276">
+                    <input type="text" id="start-lon" placeholder="Longitude" value="10.6402">
+                </div>
+                <button class="btn-secondary" id="use-current-btn"><i class="fas fa-location-dot"></i> Use Current Position</button>
+                <button class="btn-secondary" id="set-from-map-btn"><i class="fas fa-map-pin"></i> Set from Map</button>
+                <p style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Click on the map to set start point.</p>
+
+                <h2 style="margin-top:20px;">Prediction</h2>
+                <div id="prediction-info">
+                    <div class="wind-metric"><span class="label">Duration</span><span class="value" id="pred-duration">—</span></div>
+                    <div class="wind-metric"><span class="label">Landing Lat</span><span class="value" id="pred-lat">—</span></div>
+                    <div class="wind-metric"><span class="label">Landing Lon</span><span class="value" id="pred-lon">—</span></div>
+                </div>
+                <button class="btn-predict" id="predict-btn"><i class="fas fa-rocket"></i> Predict Trajectory</button>
+                <p style="font-size:12px; color:var(--text-secondary); margin-top:12px;">
+                    Uses current wind estimate from telemetry.
+                </p>
+            </div>
+            <div class="wind-map">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let map;
+        let windArrow = null;
+        let predictedPath = null;
+        let landingMarker = null;
+        let startMarker = null;
+        let startLat = 35.8276;
+        let startLon = 10.6402;
+
+        function initWindMap() {
+            const center = [35.8276, 10.6402];
+            map = L.map('map').setView(center, 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Click on map to set start point
+            map.on('click', function(e) {
+                const lat = e.latlng.lat;
+                const lon = e.latlng.lng;
+                document.getElementById('start-lat').value = lat.toFixed(6);
+                document.getElementById('start-lon').value = lon.toFixed(6);
+                updateStartMarker(lat, lon);
+            });
+            
+            // Initial start marker
+            updateStartMarker(startLat, startLon);
+        }
+
+        function updateStartMarker(lat, lon) {
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker([lat, lon], {
+                icon: L.divIcon({ 
+                    className: 'start-marker', 
+                    html: '🚀', 
+                    iconSize: [24, 24] 
+                })
+            }).addTo(map).bindPopup('Start Position');
+            startLat = lat;
+            startLon = lon;
+        }
+
+        async function fetchWind() {
+            try {
+                const response = await fetch('/api/wind/current');
+                const data = await response.json();
+                if (data.error) {
+                    document.getElementById('wind-speed').textContent = '⚠️ ' + data.error;
+                    return;
+                }
+                document.getElementById('wind-speed').textContent = data.speed.toFixed(1) + ' m/s';
+                document.getElementById('wind-dir').textContent = data.direction.toFixed(0) + '°';
+                document.getElementById('wind-conf').textContent = (data.confidence * 100).toFixed(0) + '%';
+                // Update map arrow at current position
+                if (data.latitude && data.longitude) {
+                    updateWindArrow(data);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function updateWindArrow(data) {
+            if (windArrow) map.removeLayer(windArrow);
+            const lat = data.latitude || 35.8276;
+            const lon = data.longitude || 10.6402;
+            const speed = data.speed || 0;
+            const direction = data.direction || 0;
+            const arrowLength = Math.min(30, speed * 3 + 10);
+            const angle = direction - 90;
+            const icon = L.divIcon({
+                html: `<div style="transform: rotate(${angle}deg); text-align: center; font-size: ${arrowLength}px; line-height: 1; color: #ff6b35;">↑</div>`,
+                iconSize: [30, 30],
+                className: 'wind-arrow'
+            });
+            windArrow = L.marker([lat, lon], { icon: icon }).addTo(map);
+            windArrow.bindPopup(`Wind: ${speed.toFixed(1)} m/s from ${direction.toFixed(0)}°`);
+        }
+
+        async function predictTrajectory() {
+            const btn = document.getElementById('predict-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Predicting...';
+            try {
+                const lat = parseFloat(document.getElementById('start-lat').value) || startLat;
+                const lon = parseFloat(document.getElementById('start-lon').value) || startLon;
+                const response = await fetch('/api/predict/trajectory', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ lat: lat, lon: lon })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                document.getElementById('pred-duration').textContent = Math.round(data.duration / 60) + ' min';
+                document.getElementById('pred-lat').textContent = data.landing_lat.toFixed(4);
+                document.getElementById('pred-lon').textContent = data.landing_lon.toFixed(4);
+                drawPredictedPath(data.trajectory);
+                // Also update start marker to the position used
+                updateStartMarker(lat, lon);
+            } catch (e) {
+                alert('Prediction failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-rocket"></i> Predict Trajectory';
+            }
+        }
+
+        function drawPredictedPath(trajectory) {
+            if (predictedPath) map.removeLayer(predictedPath);
+            if (landingMarker) map.removeLayer(landingMarker);
+            const points = trajectory.map(p => [p.latitude, p.longitude]);
+            predictedPath = L.polyline(points, {
+                color: '#ff6b35',
+                weight: 3,
+                opacity: 0.6,
+                dashArray: '8 4'
+            }).addTo(map);
+            const last = trajectory[trajectory.length - 1];
+            landingMarker = L.marker([last.latitude, last.longitude], {
+                icon: L.divIcon({ className: 'landing-marker', html: '🛬', iconSize: [24, 24] })
+            }).addTo(map).bindPopup('Predicted Landing');
+            map.fitBounds(predictedPath.getBounds(), { padding: [30, 30] });
+        }
+
+        document.getElementById('predict-btn').addEventListener('click', predictTrajectory);
+        
+        document.getElementById('use-current-btn').addEventListener('click', function() {
+            fetch('/api/telemetry/latest')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.latitude && data.longitude) {
+                        document.getElementById('start-lat').value = data.latitude.toFixed(6);
+                        document.getElementById('start-lon').value = data.longitude.toFixed(6);
+                        updateStartMarker(data.latitude, data.longitude);
+                    } else {
+                        alert('No current position available');
+                    }
+                })
+                .catch(e => alert('Error fetching position: ' + e.message));
+        });
+
+        document.getElementById('set-from-map-btn').addEventListener('click', function() {
+            alert('Click on the map to set the start point!');
+        });
+
+        initWindMap();
+        fetchWind();
+        setInterval(fetchWind, 10000); // refresh every 10s
+    </script>
+</body>
+</html>

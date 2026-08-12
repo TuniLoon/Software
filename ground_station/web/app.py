@@ -1,19 +1,18 @@
 """
 app.py
-Flask web server with cloud integration, ML anomaly detection, flight analysis,
-multi‑balloon support, flight planner, export, and real‑time toggle.
+TuniLoon Ground Station – Full Integration (All Sprints)
 """
 
 import sys
 import traceback
+import math
 from pathlib import Path
 
-# Add project root to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, request, send_file
 
 from ground_station.src.Decoder import TelemetryDecoder
@@ -24,7 +23,6 @@ from cloud.sondehub_uploader import SondehubUploader
 from ground_station.src.weather_service import WeatherService
 from ml.real_time_detector import RealTimeAnomalyDetector
 
-# ------------------------- App Initialization -------------------------
 app = Flask(__name__)
 
 # ------------------------- Global Variables -------------------------
@@ -51,7 +49,6 @@ telegram_bot = TelegramBot()
 sondehub = SondehubUploader()
 weather_service = WeatherService()
 
-# Anomaly detector
 anomaly_detector = RealTimeAnomalyDetector()
 model_path = Path(__file__).parent.parent.parent / "ml/models/anomaly_model.pkl"
 if model_path.exists():
@@ -174,12 +171,12 @@ def analysis_report_download():
     filename = report_gen.save_markdown()
     return send_file(filename, as_attachment=True)
 
-# ------------------------- Multi-Balloon Routes (Sprint 9) -------------------------
+# ------------------------- Multi-Balloon (Sprint 9) -------------------------
 @app.route('/multi')
 def multi_balloon():
     return render_template('multi_index.html')
 
-# ------------------------- Flight Planner Routes (Sprint 11) -------------------------
+# ------------------------- Flight Planner (Sprint 11) -------------------------
 @app.route('/planner')
 def planner():
     return render_template('planner.html')
@@ -268,6 +265,130 @@ def weather_wind():
         return jsonify(wind)
     return jsonify({'error': 'Wind data unavailable'}), 500
 
+# ------------------------- History Routes (Sprint 13) -------------------------
+@app.route('/history')
+def history_page():
+    return render_template('history.html')
+
+@app.route('/api/history/list')
+def history_list():
+    from analysis.historical_browser import HistoricalBrowser
+    browser = HistoricalBrowser()
+    flights = browser.list_flights()
+    return jsonify(flights)
+
+@app.route('/api/history/report/<flight_id>')
+def history_report(flight_id):
+    from analysis.historical_browser import HistoricalBrowser
+    from analysis.pdf_report_generator import PDFReportGenerator
+    browser = HistoricalBrowser()
+    data = browser.get_flight_data(flight_id)
+    if not data:
+        return jsonify({'error': 'Flight not found'}), 404
+    generator = PDFReportGenerator(data)
+    pdf_bytes = generator.generate()
+    return app.response_class(pdf_bytes, mimetype='application/pdf',
+                              headers={'Content-Disposition': f'attachment;filename=report_{flight_id}.pdf'})
+
+# ------------------------- Wind & Trajectory (Sprint 14) -------------------------
+@app.route('/wind')
+def wind_page():
+    return render_template('wind.html')
+
+@app.route('/api/wind/current')
+def wind_current():
+    """Estimate wind from live telemetry drift."""
+    if not telemetry_data['history'] or len(telemetry_data['history']) < 2:
+        return jsonify({'error': 'Not enough data'}), 400
+    from analysis.wind_estimator import WindEstimator
+    data = telemetry_data['history'][-20:]
+    estimator = WindEstimator(data)
+    wind = estimator.get_wind_with_confidence()
+    latest = telemetry_data['latest']
+    if latest:
+        wind['latitude'] = latest.get('latitude')
+        wind['longitude'] = latest.get('longitude')
+    return jsonify(wind)
+
+@app.route('/api/predict/trajectory', methods=['POST'])
+def predict_trajectory():
+    """Predict trajectory using real‑time wind and custom start position."""
+    try:
+        # 1. Get start position from request or fallback to current telemetry
+        req_data = request.get_json() or {}
+        lat = req_data.get('lat')
+        lon = req_data.get('lon')
+        if lat is None or lon is None:
+            latest = telemetry_data.get('latest')
+            if latest:
+                lat = latest.get('latitude', 35.8276)
+                lon = latest.get('longitude', 10.6402)
+            else:
+                lat, lon = 35.8276, 10.6402
+
+        # 2. Get current wind estimate (speed, direction, confidence)
+        wind_resp = wind_current()
+        if wind_resp.status_code != 200:
+            # Fallback to mock wind
+            wind_speed = 8.0
+            wind_dir = 135
+        else:
+            wind_data = wind_resp.get_json()
+            wind_speed = wind_data.get('speed', 8.0)
+            wind_dir = wind_data.get('direction', 135)
+
+        # 3. Simulate trajectory using constant wind (can be enhanced with altitude dependence)
+        duration = 3600  # 1 hour
+        step = 60
+        points = []
+        cur_lat, cur_lon = lat, lon
+        total_time = 0
+
+        while total_time < duration:
+            # Convert wind direction to radians (clockwise from north)
+            dir_rad = math.radians(wind_dir)
+            # Displacement in meters per step
+            dx = wind_speed * step * math.sin(dir_rad)
+            dy = wind_speed * step * math.cos(dir_rad)
+            # Convert to lat/lon degrees
+            lat_change = dy / 111320
+            lon_change = dx / (111320 * math.cos(math.radians(cur_lat)))
+            cur_lat += lat_change
+            cur_lon += lon_change
+            total_time += step
+
+            # Simulate altitude (simplified: climb then descend)
+            if total_time < 3000:
+                alt = min(5 * total_time, 30000)
+            else:
+                alt = max(30000 - 15 * (total_time - 3000), 0)
+
+            points.append({
+                'time': total_time,
+                'latitude': cur_lat,
+                'longitude': cur_lon,
+                'altitude': alt
+            })
+
+            if alt <= 0 and total_time > 600:
+                break
+
+        if not points:
+            return jsonify({'error': 'Prediction failed'}), 500
+
+        last = points[-1]
+        return jsonify({
+            'landing_lat': last['latitude'],
+            'landing_lon': last['longitude'],
+            'landing_time': (datetime.now() + timedelta(seconds=last['time'])).isoformat(),
+            'duration': last['time'],
+            'trajectory': points
+        })
+
+    except Exception as e:
+        app.logger.error(f"Prediction error: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
 # ------------------------- Payload Processing -------------------------
 def process_packet(packet_string: str):
     global telemetry_data
@@ -279,7 +400,6 @@ def process_packet(packet_string: str):
         if 'timestamp' not in data:
             data['timestamp'] = datetime.now().isoformat()
         
-        # Anomaly detection with confidence threshold
         if anomaly_detector.is_initialized:
             anomaly_result = anomaly_detector.process_telemetry(data)
             confidence_threshold = 0.7
@@ -305,8 +425,9 @@ def process_packet(packet_string: str):
         telemetry_data['history'].append(data)
         if len(telemetry_data['history']) > MAX_HISTORY:
             telemetry_data['history'] = telemetry_data['history'][-MAX_HISTORY:]
+        
         logger.log(data)
-        print(f"[DEBUG] Logging packet to CSV: {data.get('altitude', '?')}m")
+        
         # MQTT
         try:
             if mqtt_publisher.connected:
@@ -316,7 +437,7 @@ def process_packet(packet_string: str):
             app.logger.error(f"MQTT error: {e}")
             telemetry_data['cloud_status']['mqtt'] = 'error'
         
-        # Telegram (status only)
+        # Telegram status
         try:
             if telegram_bot.enabled:
                 if telemetry_data['packet_count'] % 50 == 0:
@@ -383,36 +504,11 @@ def run_mock_consumer_thread():
     thread.daemon = True
     thread.start()
     return thread
-# ------------------------- History Routes (Sprint 13) -------------------------
-
-@app.route('/history')
-def history_page():
-    return render_template('history.html')
-
-@app.route('/api/history/list')
-def history_list():
-    from analysis.historical_browser import HistoricalBrowser
-    browser = HistoricalBrowser()
-    flights = browser.list_flights()
-    return jsonify(flights)
-
-@app.route('/api/history/report/<flight_id>')
-def history_report(flight_id):
-    from analysis.historical_browser import HistoricalBrowser
-    from analysis.pdf_report_generator import PDFReportGenerator
-    browser = HistoricalBrowser()
-    data = browser.get_flight_data(flight_id)
-    if not data:
-        return jsonify({'error': 'Flight not found'}), 404
-    generator = PDFReportGenerator(data)
-    pdf_bytes = generator.generate()
-    return app.response_class(pdf_bytes, mimetype='application/pdf',
-                              headers={'Content-Disposition': f'attachment;filename=report_{flight_id}.pdf'})
 
 # ------------------------- Entry Point -------------------------
 if __name__ == '__main__':
     print("=" * 60)
-    print("  TuniLoon Ground Station with ML, Analysis & Multi-Balloon")
+    print("  TuniLoon Ground Station – All Sprints Integrated")
     print("  http://localhost:5000")
     print("=" * 60)
     print()
@@ -421,4 +517,3 @@ if __name__ == '__main__':
     print()
     run_mock_consumer_thread()
     app.run(debug=False, host='0.0.0.0', port=5000)
-

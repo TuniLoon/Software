@@ -1,0 +1,16 @@
+{
+    "wind_model": {
+        "estimation_window": 10,
+        "altitude_factor": 1.5,
+        "max_altitude_effect": 5000
+    },
+    "prediction": {
+        "duration": 3600,
+        "step": 60,
+        "max_altitude": 30000
+    },
+    "display": {
+        "arrow_scale": 1.0,
+        "path_alpha": 0.6
+    }
+}

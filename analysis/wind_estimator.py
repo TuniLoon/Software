@@ -1,18 +1,19 @@
 """
 wind_estimator.py
-Estimate wind speed and direction from GPS drift.
+Estimate wind speed and direction from GPS drift (live telemetry).
 """
 
 import math
-from typing import List, Dict, Tuple
-from datetime import datetime
+from typing import List, Dict, Tuple, Optional
+from datetime import datetime, timedelta
 
 class WindEstimator:
-    def __init__(self, data: List[Dict]):
-        self.data = data
+    def __init__(self, data: List[Dict] = None):
+        self.data = data or []
         self.wind_speed = 0.0
         self.wind_direction = 0.0
-        if len(data) >= 2:
+        self.confidence = 0.0
+        if len(self.data) >= 2:
             self._estimate()
     
     def _haversine(self, lat1, lon1, lat2, lon2):
@@ -24,37 +25,66 @@ class WindEstimator:
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         return R * c
     
-    def _estimate(self):
-        start = self.data[0]
-        end = self.data[-1]
-        distance = self._haversine(start['latitude'], start['longitude'],
-                                   end['latitude'], end['longitude'])
-        t1 = datetime.fromisoformat(start['timestamp'])
-        t2 = datetime.fromisoformat(end['timestamp'])
-        duration = (t2 - t1).total_seconds()
-        if duration > 0:
-            self.wind_speed = (distance * 1000) / duration  # m/s
-        else:
-            self.wind_speed = 0.0
-        
-        # Bearing from start to end
-        lat1, lon1 = math.radians(start['latitude']), math.radians(start['longitude'])
-        lat2, lon2 = math.radians(end['latitude']), math.radians(end['longitude'])
+    def _bearing(self, lat1, lon1, lat2, lon2):
+        lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
         dlon = lon2 - lon1
         x = math.sin(dlon) * math.cos(lat2)
         y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-        bearing = math.atan2(x, y)
-        bearing = math.degrees(bearing)
-        self.wind_direction = (bearing + 360) % 360
+        bearing = math.degrees(math.atan2(x, y))
+        return (bearing + 360) % 360
+    
+    def _estimate(self):
+        """Compute wind from telemetry data (average over last N points)."""
+        if len(self.data) < 2:
+            return
+        
+        # Use last N points (max 10) for smooth estimation
+        window = min(len(self.data), 10)
+        points = self.data[-window:]
+        
+        total_speed = 0.0
+        total_dir = 0.0
+        count = 0
+        
+        for i in range(1, len(points)):
+            p1 = points[i-1]
+            p2 = points[i]
+            try:
+                dt = (datetime.fromisoformat(p2['timestamp']) - 
+                      datetime.fromisoformat(p1['timestamp'])).total_seconds()
+                if dt <= 0:
+                    continue
+                distance = self._haversine(p1['latitude'], p1['longitude'],
+                                          p2['latitude'], p2['longitude'])
+                speed = (distance * 1000) / dt  # m/s
+                bearing = self._bearing(p1['latitude'], p1['longitude'],
+                                       p2['latitude'], p2['longitude'])
+                # Weight by distance (longer distances = more reliable)
+                weight = distance
+                total_speed += speed * weight
+                total_dir += bearing * weight
+                count += weight
+            except:
+                continue
+        
+        if count > 0:
+            self.wind_speed = total_speed / count
+            self.wind_direction = total_dir / count
+            self.confidence = min(1, len(points) / 10)
     
     def get_wind(self) -> Tuple[float, float]:
         return (self.wind_speed, self.wind_direction)
-
-if __name__ == "__main__":
-    test_data = [
-        {'timestamp': '2026-08-10T10:00:00', 'latitude': 35.8276, 'longitude': 10.6402},
-        {'timestamp': '2026-08-10T11:00:00', 'latitude': 35.8300, 'longitude': 10.6430},
-    ]
-    wind = WindEstimator(test_data)
-    speed, direction = wind.get_wind()
-    print(f"Wind speed: {speed:.1f} m/s, Direction: {direction:.1f}°")
+    
+    def get_wind_with_confidence(self) -> Dict:
+        return {
+            'speed': self.wind_speed,
+            'direction': self.wind_direction,
+            'confidence': self.confidence
+        }
+    
+    def update(self, data: List[Dict]):
+        """Add new data and re‑estimate."""
+        self.data = data
+        if len(data) >= 2:
+            self._estimate()
+        return self.get_wind_with_confidence()
