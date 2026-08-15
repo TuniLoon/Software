@@ -1,29 +1,22 @@
-"""
-telegram_bot.py
-Send alerts via Telegram using environment variables.
-"""
-
 import os
-import json
 import time
 import requests
-from dotenv import load_dotenv
-
-load_dotenv()
+from ground_station.src.config import config
 
 class TelegramBot:
     def __init__(self):
-        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
-        self.chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
-        self.enabled = bool(self.bot_token and self.chat_id)
+        self.bot_token = config.TELEGRAM_BOT_TOKEN
+        self.chat_id = config.TELEGRAM_CHAT_ID
+        self.enabled = config.TELEGRAM_ENABLED
         self.last_alert_time = {}
-        self.alert_cooldown = 60
+        self.alert_cooldown = config.TELEGRAM_ALERT_COOLDOWN
+        if not self.enabled:
+            print("[Telegram] Warning: Bot token or chat ID not set. Alerts disabled.")
 
     def send_message(self, message):
-        if not self.bot_token:
-            print("[Telegram] Bot token not set – skipping message")
-            return False
         if not self.enabled:
+            return False
+        if not self.bot_token:
             return False
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -33,7 +26,7 @@ class TelegramBot:
                 print("[Telegram] Message sent")
                 return True
             else:
-                print(f"[Telegram] Error: {resp.status_code}")
+                print(f"[Telegram] Error: {resp.status_code} - {resp.text}")
                 return False
         except Exception as e:
             print(f"[Telegram] Send error: {e}")
@@ -49,5 +42,7 @@ class TelegramBot:
         return True
 
     def check_and_alert(self, data):
-        # Existing logic – unchanged, just using env
         pass
+
+    def reset_state(self):
+        self.last_alert_time = {}

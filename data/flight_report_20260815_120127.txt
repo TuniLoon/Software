@@ -1,0 +1,19 @@
+======================================================================
+  TuniLoon Flight Report
+======================================================================
+
+Date: 2026-08-15 12:01:27
+
+📊 Flight Statistics:
+----------------------------------------
+Total packets sent:   1
+Valid packets:        1
+Invalid packets:      0
+Max altitude:         0m
+Min temperature:      0.0°C
+Max temperature:      24.9°C
+Flight duration:      0s
+Ascent duration:      0s
+Descent duration:     30s
+Landing location:     (34.7400, 10.7600)
+Landing time:         2026-08-15T12:01:27.410159

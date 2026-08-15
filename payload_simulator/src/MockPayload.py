@@ -122,6 +122,10 @@ class MockPayload:
         except KeyboardInterrupt:
             print("\n[INFO] Simulation stopped by user")
         print(f"[INFO] Total packets sent: {self.total_packets_sent}")
+    def get_packet_data(self, time_index: int):
+        """Get packet data at a specific time index."""
+        self.current_index = time_index
+        return self.get_next_packet()
 
 if __name__ == "__main__":
     import argparse

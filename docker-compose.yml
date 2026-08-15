@@ -8,6 +8,7 @@ services:
       - ./data:/app/data
       - ./config:/app/config
       - ./ml/models:/app/ml/models
+      - ./logs:/app/logs
     environment:
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}

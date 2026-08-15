@@ -1,25 +1,18 @@
-"""
-mqtt_publisher.py
-Publish telemetry to MQTT with TLS support.
-"""
-
 import os
 import json
 import time
 import ssl
-from dotenv import load_dotenv
 import paho.mqtt.client as mqtt
-
-load_dotenv()
+from ground_station.src.config import config
 
 class MQTTPublisher:
     def __init__(self):
-        self.broker = os.getenv('MQTT_BROKER', 'broker.hivemq.com')
-        self.port = int(os.getenv('MQTT_PORT', 8883))
-        self.username = os.getenv('MQTT_USERNAME', '')
-        self.password = os.getenv('MQTT_PASSWORD', '')
-        self.topic = "tuniloon/telemetry"
-        self.client_id = f"tuniloon_{int(time.time())}"
+        self.broker = config.MQTT_BROKER
+        self.port = config.MQTT_PORT
+        self.username = config.MQTT_USERNAME
+        self.password = config.MQTT_PASSWORD
+        self.topic = config.MQTT_TOPIC
+        self.client_id = config.MQTT_CLIENT_ID
         self.client = None
         self.connected = False
 
@@ -27,8 +20,8 @@ class MQTTPublisher:
         self.client = mqtt.Client(client_id=self.client_id)
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
-        # Enable TLS
-        self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+        if config.MQTT_TLS:
+            self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         try:
