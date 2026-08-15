@@ -1,19 +1,26 @@
 """
 app.py
-TuniLoon Ground Station – Full Integration (All Sprints)
+TuniLoon Ground Station – Full Integration (All Sprints) + Security (Sprint 15)
 """
 
 import sys
 import traceback
 import math
+import os
 from pathlib import Path
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import time
 import threading
-from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, request, send_file
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from marshmallow import Schema, fields, ValidationError
 
 from ground_station.src.Decoder import TelemetryDecoder
 from ground_station.src.Logger import TelemetryLogger
@@ -24,6 +31,24 @@ from ground_station.src.weather_service import WeatherService
 from ml.real_time_detector import RealTimeAnomalyDetector
 
 app = Flask(__name__)
+
+# ------------------------- Rate Limiter -------------------------
+limiter = Limiter(app)
+limiter.default_limits = ["200 per day", "50 per hour"]
+
+# ------------------------- Input Validation Schemas -------------------------
+class PlannerSchema(Schema):
+    lat = fields.Float(required=True, validate=lambda x: -90 <= x <= 90)
+    lon = fields.Float(required=True, validate=lambda x: -180 <= x <= 180)
+    launch_time = fields.Str(required=True)
+
+class TrajectorySchema(Schema):
+    lat = fields.Float(validate=lambda x: -90 <= x <= 90)
+    lon = fields.Float(validate=lambda x: -180 <= x <= 180)
+    duration = fields.Int(load_default=3600)
+
+class TelemetryProcessSchema(Schema):
+    packet = fields.Str(required=True)
 
 # ------------------------- Global Variables -------------------------
 telemetry_data = {
@@ -71,6 +96,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/api/telemetry/latest')
+@limiter.limit("30 per minute")
 def get_latest():
     try:
         return jsonify(telemetry_data['latest'])
@@ -79,6 +105,7 @@ def get_latest():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/telemetry/history')
+@limiter.limit("30 per minute")
 def get_history():
     try:
         limit = request.args.get('limit', 100, type=int)
@@ -88,6 +115,7 @@ def get_history():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/telemetry/stats')
+@limiter.limit("30 per minute")
 def get_stats():
     try:
         stats = {
@@ -135,6 +163,7 @@ def analysis_page():
     return render_template('analysis.html')
 
 @app.route('/api/analysis/latest')
+@limiter.limit("10 per minute")
 def analysis_latest():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data available'}), 404
@@ -156,6 +185,7 @@ def analysis_latest():
     })
 
 @app.route('/api/analysis/report/download')
+@limiter.limit("5 per minute")
 def analysis_report_download():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data'}), 404
@@ -182,16 +212,18 @@ def planner():
     return render_template('planner.html')
 
 @app.route('/api/planner/predict', methods=['POST'])
+@limiter.limit("5 per minute")
 def planner_predict():
-    from analysis.flight_planner import FlightPlanner
-    data = request.get_json()
-    lat = data.get('lat')
-    lon = data.get('lon')
-    launch_time_str = data.get('launch_time')
-    if lat is None or lon is None or launch_time_str is None:
-        return jsonify({'error': 'Missing parameters'}), 400
     try:
-        launch_time = datetime.fromisoformat(launch_time_str)
+        schema = PlannerSchema()
+        data = schema.load(request.get_json())
+    except ValidationError as err:
+        return jsonify({'error': 'Invalid input', 'details': err.messages}), 400
+    from analysis.flight_planner import FlightPlanner
+    lat = data['lat']
+    lon = data['lon']
+    try:
+        launch_time = datetime.fromisoformat(data['launch_time'])
     except ValueError:
         return jsonify({'error': 'Invalid datetime format'}), 400
     planner = FlightPlanner(weather_service)
@@ -200,6 +232,7 @@ def planner_predict():
 
 # ------------------------- Export Routes (Sprint 12) -------------------------
 @app.route('/api/export/kml')
+@limiter.limit("5 per minute")
 def export_kml():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data'}), 404
@@ -210,6 +243,7 @@ def export_kml():
                               headers={'Content-Disposition': 'attachment;filename=flight.kml'})
 
 @app.route('/api/export/gpx')
+@limiter.limit("5 per minute")
 def export_gpx():
     if not telemetry_data['history']:
         return jsonify({'error': 'No flight data'}), 404
@@ -220,6 +254,7 @@ def export_gpx():
                               headers={'Content-Disposition': 'attachment;filename=flight.gpx'})
 
 @app.route('/api/sim/toggle', methods=['POST'])
+@limiter.limit("10 per minute")
 def toggle_simulation_speed():
     global simulation_real_time
     data = request.get_json()
@@ -232,6 +267,7 @@ def toggle_simulation_speed():
 
 # ------------------------- Weather Routes (Sprint 10) -------------------------
 @app.route('/api/weather/current')
+@limiter.limit("10 per minute")
 def weather_current():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
@@ -243,6 +279,7 @@ def weather_current():
     return jsonify({'error': 'Weather data unavailable'}), 500
 
 @app.route('/api/weather/forecast')
+@limiter.limit("10 per minute")
 def weather_forecast():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
@@ -255,6 +292,7 @@ def weather_forecast():
     return jsonify({'error': 'Forecast unavailable'}), 500
 
 @app.route('/api/weather/wind')
+@limiter.limit("10 per minute")
 def weather_wind():
     lat = request.args.get('lat', type=float)
     lon = request.args.get('lon', type=float)
@@ -271,6 +309,7 @@ def history_page():
     return render_template('history.html')
 
 @app.route('/api/history/list')
+@limiter.limit("10 per minute")
 def history_list():
     from analysis.historical_browser import HistoricalBrowser
     browser = HistoricalBrowser()
@@ -278,6 +317,7 @@ def history_list():
     return jsonify(flights)
 
 @app.route('/api/history/report/<flight_id>')
+@limiter.limit("5 per minute")
 def history_report(flight_id):
     from analysis.historical_browser import HistoricalBrowser
     from analysis.pdf_report_generator import PDFReportGenerator
@@ -296,8 +336,8 @@ def wind_page():
     return render_template('wind.html')
 
 @app.route('/api/wind/current')
+@limiter.limit("10 per minute")
 def wind_current():
-    """Estimate wind from live telemetry drift."""
     if not telemetry_data['history'] or len(telemetry_data['history']) < 2:
         return jsonify({'error': 'Not enough data'}), 400
     from analysis.wind_estimator import WindEstimator
@@ -311,83 +351,75 @@ def wind_current():
     return jsonify(wind)
 
 @app.route('/api/predict/trajectory', methods=['POST'])
+@limiter.limit("5 per minute")
 def predict_trajectory():
-    """Predict trajectory using real‑time wind and custom start position."""
     try:
-        # 1. Get start position from request or fallback to current telemetry
-        req_data = request.get_json() or {}
-        lat = req_data.get('lat')
-        lon = req_data.get('lon')
-        if lat is None or lon is None:
-            latest = telemetry_data.get('latest')
-            if latest:
-                lat = latest.get('latitude', 35.8276)
-                lon = latest.get('longitude', 10.6402)
-            else:
-                lat, lon = 35.8276, 10.6402
+        schema = TrajectorySchema()
+        req_data = schema.load(request.get_json() or {})
+    except ValidationError as err:
+        return jsonify({'error': 'Invalid input', 'details': err.messages}), 400
 
-        # 2. Get current wind estimate (speed, direction, confidence)
-        wind_resp = wind_current()
-        if wind_resp.status_code != 200:
-            # Fallback to mock wind
-            wind_speed = 8.0
-            wind_dir = 135
+    lat = req_data.get('lat')
+    lon = req_data.get('lon')
+    if lat is None or lon is None:
+        latest = telemetry_data.get('latest')
+        if latest:
+            lat = latest.get('latitude', 35.8276)
+            lon = latest.get('longitude', 10.6402)
         else:
-            wind_data = wind_resp.get_json()
-            wind_speed = wind_data.get('speed', 8.0)
-            wind_dir = wind_data.get('direction', 135)
+            lat, lon = 35.8276, 10.6402
 
-        # 3. Simulate trajectory using constant wind (can be enhanced with altitude dependence)
-        duration = 3600  # 1 hour
-        step = 60
-        points = []
-        cur_lat, cur_lon = lat, lon
-        total_time = 0
+    # Get wind estimate
+    wind_resp = wind_current()
+    if wind_resp.status_code != 200:
+        wind_speed = 8.0
+        wind_dir = 135
+    else:
+        wind_data = wind_resp.get_json()
+        wind_speed = wind_data.get('speed', 8.0)
+        wind_dir = wind_data.get('direction', 135)
 
-        while total_time < duration:
-            # Convert wind direction to radians (clockwise from north)
-            dir_rad = math.radians(wind_dir)
-            # Displacement in meters per step
-            dx = wind_speed * step * math.sin(dir_rad)
-            dy = wind_speed * step * math.cos(dir_rad)
-            # Convert to lat/lon degrees
-            lat_change = dy / 111320
-            lon_change = dx / (111320 * math.cos(math.radians(cur_lat)))
-            cur_lat += lat_change
-            cur_lon += lon_change
-            total_time += step
+    duration = req_data.get('duration', 3600)
+    step = 60
+    points = []
+    cur_lat, cur_lon = lat, lon
+    total_time = 0
 
-            # Simulate altitude (simplified: climb then descend)
-            if total_time < 3000:
-                alt = min(5 * total_time, 30000)
-            else:
-                alt = max(30000 - 15 * (total_time - 3000), 0)
+    while total_time < duration:
+        dir_rad = math.radians(wind_dir)
+        dx = wind_speed * step * math.sin(dir_rad)
+        dy = wind_speed * step * math.cos(dir_rad)
+        lat_change = dy / 111320
+        lon_change = dx / (111320 * math.cos(math.radians(cur_lat)))
+        cur_lat += lat_change
+        cur_lon += lon_change
+        total_time += step
 
-            points.append({
-                'time': total_time,
-                'latitude': cur_lat,
-                'longitude': cur_lon,
-                'altitude': alt
-            })
+        if total_time < 3000:
+            alt = min(5 * total_time, 30000)
+        else:
+            alt = max(30000 - 15 * (total_time - 3000), 0)
 
-            if alt <= 0 and total_time > 600:
-                break
-
-        if not points:
-            return jsonify({'error': 'Prediction failed'}), 500
-
-        last = points[-1]
-        return jsonify({
-            'landing_lat': last['latitude'],
-            'landing_lon': last['longitude'],
-            'landing_time': (datetime.now() + timedelta(seconds=last['time'])).isoformat(),
-            'duration': last['time'],
-            'trajectory': points
+        points.append({
+            'time': total_time,
+            'latitude': cur_lat,
+            'longitude': cur_lon,
+            'altitude': alt
         })
+        if alt <= 0 and total_time > 600:
+            break
 
-    except Exception as e:
-        app.logger.error(f"Prediction error: {e}\n{traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+    if not points:
+        return jsonify({'error': 'Prediction failed'}), 500
+
+    last = points[-1]
+    return jsonify({
+        'landing_lat': last['latitude'],
+        'landing_lon': last['longitude'],
+        'landing_time': (datetime.now() + timedelta(seconds=last['time'])).isoformat(),
+        'duration': last['time'],
+        'trajectory': points
+    })
 
 # ------------------------- Payload Processing -------------------------
 def process_packet(packet_string: str):
@@ -508,7 +540,7 @@ def run_mock_consumer_thread():
 # ------------------------- Entry Point -------------------------
 if __name__ == '__main__':
     print("=" * 60)
-    print("  TuniLoon Ground Station – All Sprints Integrated")
+    print("  TuniLoon Ground Station – All Sprints + Security")
     print("  http://localhost:5000")
     print("=" * 60)
     print()

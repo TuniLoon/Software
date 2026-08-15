@@ -34,3 +34,5 @@ config/cloud_config.json
 *.secret
 *.key
 .env
+.env
+config/cloud_config.json

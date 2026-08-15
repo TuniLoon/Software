@@ -1,12 +1,22 @@
+"""
+weather_service.py
+Fetch weather data from OpenWeatherMap using environment variables.
+"""
+
+import os
 import requests
 import json
-import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class WeatherService:
-    def __init__(self, api_key=None, cache_file="data/weather_cache.json"):
-        self.api_key = api_key or os.getenv("OPENWEATHER_API_KEY", "YOUR_API_KEY")
+    def __init__(self, cache_file="data/weather_cache.json"):
+        self.api_key = os.getenv('OPENWEATHER_API_KEY', '')
+        if not self.api_key:
+            print("[Weather] Warning: OPENWEATHER_API_KEY not set in .env")
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
         self.cache_duration = 600  # 10 minutes
@@ -35,8 +45,8 @@ class WeatherService:
         if self._is_cache_valid(cache_key):
             return self.cache[cache_key]['data']
 
-        # If no API key, return mock data (fast)
-        if self.api_key == "YOUR_API_KEY":
+        # If no API key, return mock data
+        if not self.api_key:
             mock = {
                 'main': {'temp': 25, 'pressure': 1013, 'humidity': 60},
                 'wind': {'speed': 5, 'deg': 180},
@@ -72,12 +82,12 @@ class WeatherService:
         return None
 
     def get_forecast(self, lat, lon, cnt=8):
-        """Get 24‑hour forecast (mock if no API key)."""
         cache_key = f"forecast_{lat:.4f}_{lon:.4f}_{cnt}"
         if self._is_cache_valid(cache_key):
             return self.cache[cache_key]['data']
-        if self.api_key == "YOUR API KEY":
-            from datetime import timedelta
+
+        if not self.api_key:
+            # mock forecast
             mock = {
                 'list': [
                     {
@@ -90,53 +100,10 @@ class WeatherService:
             self.cache[cache_key] = {'timestamp': datetime.now().timestamp(), 'data': mock}
             self._save_cache()
             return mock
-        url = "https://api.openweathermap.org/data/2.5/forecast"
-        params = {'lat': lat, 'lon': lon, 'appid': self.api_key, 'units': 'metric', 'cnt': cnt}
-        try:
-            import requests
-            resp = requests.get(url, params=params, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                self.cache[cache_key] = {'timestamp': datetime.now().timestamp(), 'data': data}
-                self._save_cache()
-                return data
-        except:
-            pass
-        return None
 
-    def get_forecast(self, lat, lon, cnt=8):
-        """Get 24‑hour forecast (mock if no API key)."""
-        cache_key = f"forecast_{lat:.4f}_{lon:.4f}_{cnt}"
-        if self._is_cache_valid(cache_key):
-            return self.cache[cache_key]['data']
-        
-        # If no real API key, return mock data that varies with location
-        if self.api_key == "c9921e2ee89c16a420f00d536364f2f6":
-            from datetime import timedelta
-            # Base wind speed and direction depend on lat/lon
-            base_speed = 5 + (lat - 34) * 0.5 + (lon - 10) * 0.3
-            base_dir = 180 + (lat - 34) * 5 + (lon - 10) * 3
-            mock = {
-                'list': [
-                    {
-                        'dt': int((datetime.now() + timedelta(hours=i*3)).timestamp()),
-                        'wind': {
-                            'speed': base_speed + i * 0.5,
-                            'deg': (base_dir + i * 10) % 360
-                        }
-                    }
-                    for i in range(cnt)
-                ]
-            }
-            self.cache[cache_key] = {'timestamp': datetime.now().timestamp(), 'data': mock}
-            self._save_cache()
-            return mock
-        
-        # Real API call (unchanged)
         url = "https://api.openweathermap.org/data/2.5/forecast"
         params = {'lat': lat, 'lon': lon, 'appid': self.api_key, 'units': 'metric', 'cnt': cnt}
         try:
-            import requests
             resp = requests.get(url, params=params, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
@@ -144,48 +111,5 @@ class WeatherService:
                 self._save_cache()
                 return data
         except:
-            pass
-        return None
-
-    def get_forecast(self, lat, lon, cnt=8):
-        """Get 24‑hour forecast (mock if no API key)."""
-        cache_key = f"forecast_{lat:.4f}_{lon:.4f}_{cnt}"
-        if self._is_cache_valid(cache_key):
-            return self.cache[cache_key]['data']
-        
-        # If no real API key, return mock data that varies with location
-        if self.api_key == "c9921e2ee89c16a420f00d536364f2f6":
-            from datetime import timedelta
-            # Base wind speed and direction depend on lat/lon
-            base_speed = 5 + (lat - 34) * 0.5 + (lon - 10) * 0.3
-            base_dir = 180 + (lat - 34) * 5 + (lon - 10) * 3
-            mock = {
-                'list': [
-                    {
-                        'dt': int((datetime.now() + timedelta(hours=i*3)).timestamp()),
-                        'wind': {
-                            'speed': base_speed + i * 0.5,
-                            'deg': (base_dir + i * 10) % 360
-                        }
-                    }
-                    for i in range(cnt)
-                ]
-            }
-            self.cache[cache_key] = {'timestamp': datetime.now().timestamp(), 'data': mock}
-            self._save_cache()
-            return mock
-        
-        # Real API call (unchanged)
-        url = "https://api.openweathermap.org/data/2.5/forecast"
-        params = {'lat': lat, 'lon': lon, 'appid': self.api_key, 'units': 'metric', 'cnt': cnt}
-        try:
-            import requests
-            resp = requests.get(url, params=params, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                self.cache[cache_key] = {'timestamp': datetime.now().timestamp(), 'data': data}
-                self._save_cache()
-                return data
-        except:
-            pass
+            return None
         return None
