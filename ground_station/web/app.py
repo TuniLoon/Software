@@ -537,6 +537,21 @@ def run_mock_consumer_thread():
     thread.daemon = True
     thread.start()
     return thread
+# ------------------------- Replay Routes (Sprint 17) -------------------------
+
+@app.route('/replay')
+def replay_page():
+    return render_template('replay.html')
+
+@app.route('/api/replay/upload', methods=['POST'])
+def replay_upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Empty filename'}), 400
+    # We'll parse CSV on the frontend, so just return success
+    return jsonify({'status': 'ok'})
 
 # ------------------------- Entry Point -------------------------
 if __name__ == '__main__':

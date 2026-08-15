@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="manifest" href="/static/manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TuniLoon Ground Station</title>
@@ -15,6 +16,7 @@
     
     <!-- Plotly for graphs -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,6 +30,7 @@
                 <span class="badge" id="status-badge">● Connecting...</span>
             </div>
             <div class="header-right">
+                <button id="reset-layout-btn" title="Reset layout" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-undo-alt"></i></button>
                 <a href="/planner" title="Flight Planner" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-rocket"></i></a>
                 <a href="#" id="export-kml" title="Download KML" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> KML</a>
                 <a href="#" id="export-gpx" title="Download GPX" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> GPX</a>
@@ -36,6 +39,7 @@
                 <button id="theme-toggle" title="Toggle theme">
                     <i class="fas fa-moon"></i>
                 </button>
+                <button id="reset-layout-btn" title="Reset layout" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-undo-alt"></i></button>
                 <button id="clear-btn" title="Clear data">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -84,7 +88,8 @@
         <!-- Main Grid -->
         <div class="main-grid">
             <!-- Map -->
-            <div class="card map-card">
+            <div class="card map-card" draggable="true" data-widget-id="map">
+    <div class="card" draggable="true" data-widget-id="map">
                 <div class="card-header">
                     <span><i class="fas fa-map"></i> Live Position</span>
                     <span id="map-coords">Lat: 0.0000, Lon: 0.0000</span>
@@ -93,7 +98,7 @@
             </div>
             
             <!-- Telemetry Details -->
-            <div class="card details-card">
+            <div class="card details-card" draggable="true" data-widget-id="details">
                 <div class="card-header">
                     <span><i class="fas fa-chart-line"></i> Telemetry Details</span>
                     <span id="last-updated">Last update: —</span>
@@ -143,18 +148,20 @@
             </div>
             
             <!-- Altitude Graph -->
-            <div class="card graph-card">
+            <div class="card graph-card" draggable="true" data-widget-id="altitude">
                 <div class="card-header">
                     <span><i class="fas fa-arrow-up"></i> Altitude Profile</span>
+                <button class="export-graph-btn" data-graph="altitude" title="Download PNG" style="background:none; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fas fa-download"></i></button>
                     <span>Max: <span id="graph-max-alt">0</span> m</span>
                 </div>
                 <div id="altitude-graph"></div>
             </div>
             
             <!-- Temperature Graph -->
-            <div class="card graph-card">
+            <div class="card graph-card" draggable="true" data-widget-id="temperature">
                 <div class="card-header">
                     <span><i class="fas fa-thermometer-half"></i> Temperature Profile</span>
+                <button class="export-graph-btn" data-graph="temperature" title="Download PNG" style="background:none; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fas fa-download"></i></button>
                     <span>Min: <span id="graph-min-temp">0</span>°C | Max: <span id="graph-max-temp">0</span>°C</span>
                 </div>
                 <div id="temperature-graph"></div>
@@ -165,5 +172,12 @@
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
     <script src="{{ url_for('static', filename='weather.js') }}"></script>
+    <script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/static/sw.js")
+                .then(() => console.log("[SW] Registered"))
+                .catch(err => console.error("[SW] Registration failed:", err));
+        }
+    </script>
 </body>
 </html>

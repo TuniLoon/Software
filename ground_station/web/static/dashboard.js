@@ -1,5 +1,5 @@
 /**
- * TuniLoon Dashboard – HTTP Polling (No WebSockets)
+ * TuniLoon Dashboard – HTTP Polling (Stable)
  */
 
 const CONFIG = {
@@ -61,7 +61,29 @@ function init() {
     console.log('[Dashboard] Ready!');
 }
 
-// ------------------------- Map -------------------------
+function createProgressBar() {
+    const old = document.getElementById('progress-container');
+    if (old) old.remove();
+    const container = document.createElement('div');
+    container.id = 'progress-container';
+    container.style.margin = '10px 16px';
+    container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
+            <span>Flight Progress</span>
+            <span id="progress-percent">0%</span>
+        </div>
+        <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
+            <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
+        </div>
+    `;
+    const statsBar = document.querySelector('.stats-bar');
+    if (statsBar) {
+        statsBar.parentNode.insertBefore(container, statsBar.nextSibling);
+    } else {
+        document.body.prepend(container);
+    }
+}
+
 function initMap() {
     const center = [35.8276, 10.6402];
     state.map = L.map('map').setView(center, 12);
@@ -95,7 +117,6 @@ function updateMapCoords(lat, lon) {
     DOM.mapCoords.textContent = `Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`;
 }
 
-// ------------------------- Graphs -------------------------
 function initGraphs() {
     const altDiv = document.getElementById('altitude-graph');
     state.altitudeGraph = Plotly.newPlot(altDiv, [{
@@ -178,7 +199,6 @@ function updateGraphs(data) {
     }
 }
 
-// ------------------------- UI Update Functions -------------------------
 function updateStatus(online) {
     DOM.statusBadge.textContent = online ? '● Online' : '● Offline';
     DOM.statusBadge.className = `badge ${online ? 'online' : 'offline'}`;
@@ -234,7 +254,6 @@ function updateProgress(altitude) {
     if (percentLabel) percentLabel.textContent = Math.round(percent) + '%';
 }
 
-// ------------------------- HTTP Polling -------------------------
 function startDataPolling() {
     fetchLatest();
     fetchHistory();
@@ -280,10 +299,11 @@ async function fetchHistory() {
     }
 }
 
-// ------------------------- Event Listeners -------------------------
 function initEventListeners() {
     DOM.themeToggle.addEventListener('click', toggleTheme);
     DOM.clearBtn.addEventListener('click', clearData);
+    document.getElementById("reset-layout-btn")?.addEventListener("click", resetLayout);
+
     document.getElementById('export-kml')?.addEventListener('click', function(e) {
         e.preventDefault();
         window.location.href = '/api/export/kml';
@@ -292,6 +312,7 @@ function initEventListeners() {
         e.preventDefault();
         window.location.href = '/api/export/gpx';
     });
+
     const speedBtn = document.getElementById('toggle-speed');
     if (speedBtn) {
         speedBtn.addEventListener('click', function() {
@@ -358,31 +379,79 @@ async function clearData() {
     }
 }
 
-function createProgressBar() {
-    const old = document.getElementById('progress-container');
-    if (old) old.remove();
-    const container = document.createElement('div');
-    container.id = 'progress-container';
-    container.style.margin = '10px 16px';
-    container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
-            <span>Flight Progress</span>
-            <span id="progress-percent">0%</span>
-        </div>
-        <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
-            <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
-        </div>
-    `;
-    const statsBar = document.querySelector('.stats-bar');
-    if (statsBar) {
-        statsBar.parentNode.insertBefore(container, statsBar.nextSibling);
-    } else {
-        document.body.prepend(container);
-    }
-}
-
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
+}
+
+// ------------------------- Drag & Drop Layout (Task 4) -------------------------
+const LAYOUT_STORAGE_KEY = 'tuniloon_layout';
+const WIDGET_IDS = ['map', 'details', 'altitude', 'temperature'];
+
+function getLayoutOrder() {
+    try {
+        const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+        if (saved) {
+            const order = JSON.parse(saved);
+            // Validate all IDs are present
+            const allPresent = WIDGET_IDS.every(id => order.includes(id));
+            if (allPresent && order.length === WIDGET_IDS.length) return order;
+        }
+    } catch (e) {}
+    return WIDGET_IDS; // default order
+}
+
+function saveLayoutOrder(order) {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(order));
+}
+
+function applyLayoutOrder(order) {
+    const container = document.querySelector('.main-grid');
+    if (!container) return;
+    const widgetMap = {};
+    WIDGET_IDS.forEach(id => {
+        const el = container.querySelector(`[data-widget-id="${id}"]`);
+        if (el) widgetMap[id] = el;
+    });
+    order.forEach(id => {
+        if (widgetMap[id]) {
+            container.appendChild(widgetMap[id]);
+        }
+    });
+}
+
+function initSortableLayout() {
+    const container = document.querySelector('.main-grid');
+    if (!container) return;
+
+    // Apply saved layout on load
+    const savedOrder = getLayoutOrder();
+    applyLayoutOrder(savedOrder);
+
+    // Enable drag-and-drop with SortableJS
+    const sortable = new Sortable(container, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        handle: '.card-header', // drag by header only
+        onEnd: function(evt) {
+            // Get new order from DOM
+            const cards = container.querySelectorAll('.card');
+            const newOrder = [];
+            cards.forEach(card => {
+                const id = card.getAttribute('data-widget-id');
+                if (id && WIDGET_IDS.includes(id)) newOrder.push(id);
+            });
+            if (newOrder.length === WIDGET_IDS.length) {
+                saveLayoutOrder(newOrder);
+            }
+        }
+    });
+}
+
+function resetLayout() {
+    if (confirm('Reset widget layout to default?')) {
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+        applyLayoutOrder(WIDGET_IDS);
+    }
 }

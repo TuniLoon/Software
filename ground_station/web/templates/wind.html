@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .wind-container { display: flex; flex-direction: row; gap: 20px; padding: 20px; height: calc(100vh - 80px); }
-        .wind-sidebar { width: 320px; background: var(--bg-card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; overflow-y: auto; }
+        .wind-sidebar { width: 340px; background: var(--bg-card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; overflow-y: auto; }
         .wind-map { flex: 1; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
         .wind-map #map { height: 100%; width: 100%; }
         .wind-metric { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color); }
@@ -19,10 +19,12 @@
         .btn-predict { background: #ff6b35; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 12px; }
         .btn-predict:hover { background: #e55a2b; }
         .btn-predict:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-secondary { background: #555; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        .btn-secondary { background: #555; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 6px; }
         .btn-secondary:hover { background: #666; }
+        .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
         .coord-input { display: flex; gap: 8px; margin: 8px 0; }
         .coord-input input { flex: 1; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); }
+        .history-controls { display: flex; gap: 8px; margin: 12px 0; }
     </style>
 </head>
 <body>
@@ -49,9 +51,18 @@
                     <input type="text" id="start-lat" placeholder="Latitude" value="35.8276">
                     <input type="text" id="start-lon" placeholder="Longitude" value="10.6402">
                 </div>
-                <button class="btn-secondary" id="use-current-btn"><i class="fas fa-location-dot"></i> Use Current Position</button>
-                <button class="btn-secondary" id="set-from-map-btn"><i class="fas fa-map-pin"></i> Set from Map</button>
-                <p style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Click on the map to set start point.</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-secondary" id="set-start-btn"><i class="fas fa-check"></i> Set Start</button>
+                    <button class="btn-secondary" id="use-current-btn"><i class="fas fa-location-dot"></i> Use Current</button>
+                    <button class="btn-secondary" id="set-from-map-btn"><i class="fas fa-map-pin"></i> Click Map</button>
+                </div>
+                <p style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Click on the map or use the buttons to set start point.</p>
+
+                <div class="history-controls">
+                    <button class="btn-secondary" id="undo-btn" disabled><i class="fas fa-undo"></i> Undo</button>
+                    <button class="btn-secondary" id="redo-btn" disabled><i class="fas fa-redo"></i> Redo</button>
+                    <span style="font-size:12px; color:var(--text-secondary); margin-left:auto;" id="history-count">0/0</span>
+                </div>
 
                 <h2 style="margin-top:20px;">Prediction</h2>
                 <div id="prediction-info">
@@ -70,6 +81,7 @@
         </div>
     </div>
     <script>
+        // ------------------------- State -------------------------
         let map;
         let windArrow = null;
         let predictedPath = null;
@@ -78,6 +90,30 @@
         let startLat = 35.8276;
         let startLon = 10.6402;
 
+        // History for Undo/Redo
+        let positionHistory = [];
+        let historyIndex = -1; // -1 means no position set yet
+
+        // DOM refs
+        const DOM = {
+            startLat: document.getElementById('start-lat'),
+            startLon: document.getElementById('start-lon'),
+            windSpeed: document.getElementById('wind-speed'),
+            windDir: document.getElementById('wind-dir'),
+            windConf: document.getElementById('wind-conf'),
+            predDuration: document.getElementById('pred-duration'),
+            predLat: document.getElementById('pred-lat'),
+            predLon: document.getElementById('pred-lon'),
+            predictBtn: document.getElementById('predict-btn'),
+            setStartBtn: document.getElementById('set-start-btn'),
+            useCurrentBtn: document.getElementById('use-current-btn'),
+            setFromMapBtn: document.getElementById('set-from-map-btn'),
+            undoBtn: document.getElementById('undo-btn'),
+            redoBtn: document.getElementById('redo-btn'),
+            historyCount: document.getElementById('history-count'),
+        };
+
+        // ------------------------- Map -------------------------
         function initWindMap() {
             const center = [35.8276, 10.6402];
             map = L.map('map').setView(center, 10);
@@ -85,45 +121,29 @@
                 attribution: '© OpenStreetMap',
                 maxZoom: 19
             }).addTo(map);
-            
-            // Click on map to set start point
+
             map.on('click', function(e) {
                 const lat = e.latlng.lat;
                 const lon = e.latlng.lng;
-                document.getElementById('start-lat').value = lat.toFixed(6);
-                document.getElementById('start-lon').value = lon.toFixed(6);
-                updateStartMarker(lat, lon);
+                setStartPosition(lat, lon, true); // push history
             });
-            
+
             // Initial start marker
-            updateStartMarker(startLat, startLon);
+            setStartPosition(startLat, startLon, false); // no history push
         }
 
-        function updateStartMarker(lat, lon) {
-            if (startMarker) map.removeLayer(startMarker);
-            startMarker = L.marker([lat, lon], {
-                icon: L.divIcon({ 
-                    className: 'start-marker', 
-                    html: '🚀', 
-                    iconSize: [24, 24] 
-                })
-            }).addTo(map).bindPopup('Start Position');
-            startLat = lat;
-            startLon = lon;
-        }
-
+        // ------------------------- Wind Fetch -------------------------
         async function fetchWind() {
             try {
                 const response = await fetch('/api/wind/current');
                 const data = await response.json();
                 if (data.error) {
-                    document.getElementById('wind-speed').textContent = '⚠️ ' + data.error;
+                    DOM.windSpeed.textContent = '⚠️ ' + data.error;
                     return;
                 }
-                document.getElementById('wind-speed').textContent = data.speed.toFixed(1) + ' m/s';
-                document.getElementById('wind-dir').textContent = data.direction.toFixed(0) + '°';
-                document.getElementById('wind-conf').textContent = (data.confidence * 100).toFixed(0) + '%';
-                // Update map arrow at current position
+                DOM.windSpeed.textContent = data.speed.toFixed(1) + ' m/s';
+                DOM.windDir.textContent = data.direction.toFixed(0) + '°';
+                DOM.windConf.textContent = (data.confidence * 100).toFixed(0) + '%';
                 if (data.latitude && data.longitude) {
                     updateWindArrow(data);
                 }
@@ -149,13 +169,67 @@
             windArrow.bindPopup(`Wind: ${speed.toFixed(1)} m/s from ${direction.toFixed(0)}°`);
         }
 
+        // ------------------------- Start Position & History -------------------------
+        function setStartPosition(lat, lon, pushHistory = true) {
+            startLat = lat;
+            startLon = lon;
+            DOM.startLat.value = lat.toFixed(6);
+            DOM.startLon.value = lon.toFixed(6);
+            updateStartMarker(lat, lon);
+
+            if (pushHistory) {
+                // If we are not at the end of history, truncate future entries
+                if (historyIndex < positionHistory.length - 1) {
+                    positionHistory = positionHistory.slice(0, historyIndex + 1);
+                }
+                positionHistory.push({ lat, lon });
+                historyIndex = positionHistory.length - 1;
+                updateHistoryButtons();
+            }
+        }
+
+        function updateStartMarker(lat, lon) {
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker([lat, lon], {
+                icon: L.divIcon({ 
+                    className: 'start-marker', 
+                    html: '🚀', 
+                    iconSize: [24, 24] 
+                })
+            }).addTo(map).bindPopup('Start Position');
+        }
+
+        function undoPosition() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const pos = positionHistory[historyIndex];
+                setStartPosition(pos.lat, pos.lon, false);
+                updateHistoryButtons();
+            }
+        }
+
+        function redoPosition() {
+            if (historyIndex < positionHistory.length - 1) {
+                historyIndex++;
+                const pos = positionHistory[historyIndex];
+                setStartPosition(pos.lat, pos.lon, false);
+                updateHistoryButtons();
+            }
+        }
+
+        function updateHistoryButtons() {
+            DOM.undoBtn.disabled = (historyIndex <= 0);
+            DOM.redoBtn.disabled = (historyIndex >= positionHistory.length - 1);
+            DOM.historyCount.textContent = `${positionHistory.length > 0 ? historyIndex + 1 : 0}/${positionHistory.length}`;
+        }
+
+        // ------------------------- Prediction -------------------------
         async function predictTrajectory() {
-            const btn = document.getElementById('predict-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Predicting...';
+            DOM.predictBtn.disabled = true;
+            DOM.predictBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Predicting...';
             try {
-                const lat = parseFloat(document.getElementById('start-lat').value) || startLat;
-                const lon = parseFloat(document.getElementById('start-lon').value) || startLon;
+                const lat = parseFloat(DOM.startLat.value) || startLat;
+                const lon = parseFloat(DOM.startLon.value) || startLon;
                 const response = await fetch('/api/predict/trajectory', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -166,17 +240,17 @@
                     alert('Error: ' + data.error);
                     return;
                 }
-                document.getElementById('pred-duration').textContent = Math.round(data.duration / 60) + ' min';
-                document.getElementById('pred-lat').textContent = data.landing_lat.toFixed(4);
-                document.getElementById('pred-lon').textContent = data.landing_lon.toFixed(4);
+                DOM.predDuration.textContent = Math.round(data.duration / 60) + ' min';
+                DOM.predLat.textContent = data.landing_lat.toFixed(4);
+                DOM.predLon.textContent = data.landing_lon.toFixed(4);
                 drawPredictedPath(data.trajectory);
-                // Also update start marker to the position used
-                updateStartMarker(lat, lon);
+                // Update start marker to the position used
+                setStartPosition(lat, lon, true);
             } catch (e) {
                 alert('Prediction failed: ' + e.message);
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-rocket"></i> Predict Trajectory';
+                DOM.predictBtn.disabled = false;
+                DOM.predictBtn.innerHTML = '<i class="fas fa-rocket"></i> Predict Trajectory';
             }
         }
 
@@ -197,16 +271,25 @@
             map.fitBounds(predictedPath.getBounds(), { padding: [30, 30] });
         }
 
-        document.getElementById('predict-btn').addEventListener('click', predictTrajectory);
-        
-        document.getElementById('use-current-btn').addEventListener('click', function() {
+        // ------------------------- Event Listeners -------------------------
+        DOM.predictBtn.addEventListener('click', predictTrajectory);
+
+        DOM.setStartBtn.addEventListener('click', function() {
+            const lat = parseFloat(DOM.startLat.value);
+            const lon = parseFloat(DOM.startLon.value);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                setStartPosition(lat, lon, true);
+            } else {
+                alert('Invalid coordinates');
+            }
+        });
+
+        DOM.useCurrentBtn.addEventListener('click', function() {
             fetch('/api/telemetry/latest')
                 .then(r => r.json())
                 .then(data => {
                     if (data && data.latitude && data.longitude) {
-                        document.getElementById('start-lat').value = data.latitude.toFixed(6);
-                        document.getElementById('start-lon').value = data.longitude.toFixed(6);
-                        updateStartMarker(data.latitude, data.longitude);
+                        setStartPosition(data.latitude, data.longitude, true);
                     } else {
                         alert('No current position available');
                     }
@@ -214,13 +297,23 @@
                 .catch(e => alert('Error fetching position: ' + e.message));
         });
 
-        document.getElementById('set-from-map-btn').addEventListener('click', function() {
+        DOM.setFromMapBtn.addEventListener('click', function() {
             alert('Click on the map to set the start point!');
         });
 
+        DOM.undoBtn.addEventListener('click', undoPosition);
+        DOM.redoBtn.addEventListener('click', redoPosition);
+
+        // ------------------------- Init -------------------------
         initWindMap();
         fetchWind();
         setInterval(fetchWind, 10000); // refresh every 10s
+
+        // Initial history: add the default start position
+        // We'll set it after map init
+        setTimeout(() => {
+            setStartPosition(startLat, startLon, true);
+        }, 100);
     </script>
 </body>
 </html>
