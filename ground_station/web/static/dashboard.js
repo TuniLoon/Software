@@ -1,5 +1,5 @@
 /**
- * TuniLoon Dashboard – Corrected Frontend
+ * TuniLoon Dashboard – HTTP Polling (No WebSockets)
  */
 
 const CONFIG = {
@@ -49,44 +49,6 @@ const DOM = {
     clearBtn: document.getElementById('clear-btn')
 };
 
-function createProgressBar() {
-    // Remove any existing progress container
-    const old = document.getElementById('progress-container');
-    if (old) old.remove();
-
-    const container = document.createElement('div');
-    container.id = 'progress-container';
-    container.style.margin = '10px 16px';
-    container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
-            <span>Flight Progress</span>
-            <span id="progress-percent">0%</span>
-        </div>
-        <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
-            <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
-        </div>
-    `;
-    const statsBar = document.querySelector('.stats-bar');
-    if (statsBar) {
-        statsBar.parentNode.insertBefore(container, statsBar.nextSibling);
-    } else {
-        document.body.prepend(container);
-    }
-}
-
-function updateProgress(altitude) {
-    const maxAltitude = 30000;
-    const percent = Math.min((altitude / maxAltitude) * 100, 100);
-    const progressBar = document.getElementById('flight-progress');
-    const percentLabel = document.getElementById('progress-percent');
-    if (progressBar) {
-        progressBar.style.width = percent + '%';
-    }
-    if (percentLabel) {
-        percentLabel.textContent = Math.round(percent) + '%';
-    }
-}
-
 function init() {
     console.log('[Dashboard] Initializing...');
     createProgressBar();
@@ -99,6 +61,7 @@ function init() {
     console.log('[Dashboard] Ready!');
 }
 
+// ------------------------- Map -------------------------
 function initMap() {
     const center = [35.8276, 10.6402];
     state.map = L.map('map').setView(center, 12);
@@ -132,6 +95,7 @@ function updateMapCoords(lat, lon) {
     DOM.mapCoords.textContent = `Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`;
 }
 
+// ------------------------- Graphs -------------------------
 function initGraphs() {
     const altDiv = document.getElementById('altitude-graph');
     state.altitudeGraph = Plotly.newPlot(altDiv, [{
@@ -171,6 +135,7 @@ function initGraphs() {
 
 function updateGraphs(data) {
     if (!data || data.length === 0) return;
+    data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     const times = data.map(d => new Date(d.timestamp).toLocaleTimeString());
     const altitudes = data.map(d => d.altitude || 0);
     const temperatures = data.map(d => d.temperature || 0);
@@ -213,6 +178,7 @@ function updateGraphs(data) {
     }
 }
 
+// ------------------------- UI Update Functions -------------------------
 function updateStatus(online) {
     DOM.statusBadge.textContent = online ? '● Online' : '● Offline';
     DOM.statusBadge.className = `badge ${online ? 'online' : 'offline'}`;
@@ -235,8 +201,6 @@ function updateStats(data) {
     } else {
         DOM.statStatus.style.backgroundColor = '';
     }
-
-    // Update progress bar
     updateProgress(data.altitude);
 }
 
@@ -261,6 +225,16 @@ function updatePacketCount(count) {
     DOM.packetCount.textContent = `Packets: ${count}`;
 }
 
+function updateProgress(altitude) {
+    const maxAltitude = 30000;
+    const percent = Math.min((altitude / maxAltitude) * 100, 100);
+    const progressBar = document.getElementById('flight-progress');
+    const percentLabel = document.getElementById('progress-percent');
+    if (progressBar) progressBar.style.width = percent + '%';
+    if (percentLabel) percentLabel.textContent = Math.round(percent) + '%';
+}
+
+// ------------------------- HTTP Polling -------------------------
 function startDataPolling() {
     fetchLatest();
     fetchHistory();
@@ -306,10 +280,10 @@ async function fetchHistory() {
     }
 }
 
+// ------------------------- Event Listeners -------------------------
 function initEventListeners() {
     DOM.themeToggle.addEventListener('click', toggleTheme);
     DOM.clearBtn.addEventListener('click', clearData);
-
     document.getElementById('export-kml')?.addEventListener('click', function(e) {
         e.preventDefault();
         window.location.href = '/api/export/kml';
@@ -318,7 +292,6 @@ function initEventListeners() {
         e.preventDefault();
         window.location.href = '/api/export/gpx';
     });
-
     const speedBtn = document.getElementById('toggle-speed');
     if (speedBtn) {
         speedBtn.addEventListener('click', function() {
@@ -357,7 +330,6 @@ async function clearData() {
         }
         updateGraphs([]);
         updatePacketCount(0);
-        // Reset all stat elements
         DOM.statAltitude.textContent = '0 m';
         DOM.statLatitude.textContent = '0.0000';
         DOM.statLongitude.textContent = '0.0000';
@@ -383,6 +355,29 @@ async function clearData() {
         updateStatus(true);
     } catch (error) {
         console.error('[Dashboard] Error clearing data:', error);
+    }
+}
+
+function createProgressBar() {
+    const old = document.getElementById('progress-container');
+    if (old) old.remove();
+    const container = document.createElement('div');
+    container.id = 'progress-container';
+    container.style.margin = '10px 16px';
+    container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
+            <span>Flight Progress</span>
+            <span id="progress-percent">0%</span>
+        </div>
+        <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
+            <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
+        </div>
+    `;
+    const statsBar = document.querySelector('.stats-bar');
+    if (statsBar) {
+        statsBar.parentNode.insertBefore(container, statsBar.nextSibling);
+    } else {
+        document.body.prepend(container);
     }
 }
 
