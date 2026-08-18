@@ -175,3 +175,29 @@ class Database:
             cursor.execute('DELETE FROM telemetry')
             cursor.execute('DELETE FROM flights')
             conn.commit()
+
+    def get_history(self, flight_id: Optional[int] = None, limit: Optional[int] = None) -> List[Dict]:
+        """Get telemetry packets for a flight (all if limit is None)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if flight_id is None:
+                cursor.execute('SELECT id FROM flights ORDER BY start_time DESC LIMIT 1')
+                row = cursor.fetchone()
+                if not row:
+                    return []
+                flight_id = row['id']
+            if limit is None:
+                cursor.execute('''
+                    SELECT * FROM telemetry
+                    WHERE flight_id = ?
+                    ORDER BY timestamp ASC
+                ''', (flight_id,))
+            else:
+                cursor.execute('''
+                    SELECT * FROM telemetry
+                    WHERE flight_id = ?
+                    ORDER BY timestamp DESC LIMIT ?
+                ''', (flight_id, limit))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]

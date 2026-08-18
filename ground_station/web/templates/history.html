@@ -34,6 +34,8 @@
                 <input type="number" id="filter-alt-min" placeholder="Min altitude (m)" />
                 <input type="number" id="filter-alt-max" placeholder="Max altitude (m)" />
                 <button id="clear-filters" class="btn-pdf" style="background:#555;">Clear</button>
+                
+                
             </div>
             <div id="flight-list">
                 <div class="no-flights">Loading flights...</div>
@@ -41,5 +43,41 @@
         </div>
     </div>
     <script src="{{ url_for('static', filename='history.js') }}"></script>
-</body>
+
+    <script>
+        document.getElementById('select-all').addEventListener('change', function() {
+            document.querySelectorAll('.flight-check').forEach(cb => cb.checked = this.checked);
+        });
+
+        document.getElementById('compare-btn').addEventListener('click', function() {
+            const selected = document.querySelectorAll('.flight-check:checked');
+            const ids = Array.from(selected).map(cb => cb.value);
+            if (ids.length < 2) {
+                alert('Select at least 2 flights to compare.');
+                return;
+            }
+            // Redirect to comparison page with IDs in query string
+            window.location.href = '/compare?ids=' + ids.join(',');
+        });
+    </script>
+    
+    <script>
+        document.getElementById('select-all').addEventListener('change', function() {
+            document.querySelectorAll('.flight-check').forEach(cb => cb.checked = this.checked);
+        });
+
+        document.getElementById('compare-btn').addEventListener('click', function() {
+            const selected = document.querySelectorAll('.flight-check:checked');
+            const ids = Array.from(selected).map(cb => cb.value);
+            if (ids.length < 2) {
+                alert('Select at least 2 flights to compare.');
+                return;
+            }
+            // Redirect to comparison page with IDs in query string
+            window.location.href = '/compare?ids=' + ids.join(',');
+        });
+    </script>
+    </body>
+
+
 </html>

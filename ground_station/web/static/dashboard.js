@@ -1,5 +1,5 @@
 /**
- * TuniLoon Dashboard – HTTP Polling (Stable)
+ * TuniLoon Dashboard – Stable (Task 3)
  */
 
 const CONFIG = {
@@ -302,17 +302,26 @@ async function fetchHistory() {
 function initEventListeners() {
     DOM.themeToggle.addEventListener('click', toggleTheme);
     DOM.clearBtn.addEventListener('click', clearData);
-    document.getElementById("reset-layout-btn")?.addEventListener("click", resetLayout);
 
-    document.getElementById('export-kml')?.addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = '/api/export/kml';
-    });
-    document.getElementById('export-gpx')?.addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = '/api/export/gpx';
-    });
+    // Export KML
+    const kmlBtn = document.getElementById('export-kml');
+    if (kmlBtn) {
+        kmlBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = '/api/export/kml';
+        });
+    }
 
+    // Export GPX
+    const gpxBtn = document.getElementById('export-gpx');
+    if (gpxBtn) {
+        gpxBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = '/api/export/gpx';
+        });
+    }
+
+    // Speed toggle
     const speedBtn = document.getElementById('toggle-speed');
     if (speedBtn) {
         speedBtn.addEventListener('click', function() {
@@ -383,75 +392,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
-}
-
-// ------------------------- Drag & Drop Layout (Task 4) -------------------------
-const LAYOUT_STORAGE_KEY = 'tuniloon_layout';
-const WIDGET_IDS = ['map', 'details', 'altitude', 'temperature'];
-
-function getLayoutOrder() {
-    try {
-        const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
-        if (saved) {
-            const order = JSON.parse(saved);
-            // Validate all IDs are present
-            const allPresent = WIDGET_IDS.every(id => order.includes(id));
-            if (allPresent && order.length === WIDGET_IDS.length) return order;
-        }
-    } catch (e) {}
-    return WIDGET_IDS; // default order
-}
-
-function saveLayoutOrder(order) {
-    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(order));
-}
-
-function applyLayoutOrder(order) {
-    const container = document.querySelector('.main-grid');
-    if (!container) return;
-    const widgetMap = {};
-    WIDGET_IDS.forEach(id => {
-        const el = container.querySelector(`[data-widget-id="${id}"]`);
-        if (el) widgetMap[id] = el;
-    });
-    order.forEach(id => {
-        if (widgetMap[id]) {
-            container.appendChild(widgetMap[id]);
-        }
-    });
-}
-
-function initSortableLayout() {
-    const container = document.querySelector('.main-grid');
-    if (!container) return;
-
-    // Apply saved layout on load
-    const savedOrder = getLayoutOrder();
-    applyLayoutOrder(savedOrder);
-
-    // Enable drag-and-drop with SortableJS
-    const sortable = new Sortable(container, {
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        handle: '.card-header', // drag by header only
-        onEnd: function(evt) {
-            // Get new order from DOM
-            const cards = container.querySelectorAll('.card');
-            const newOrder = [];
-            cards.forEach(card => {
-                const id = card.getAttribute('data-widget-id');
-                if (id && WIDGET_IDS.includes(id)) newOrder.push(id);
-            });
-            if (newOrder.length === WIDGET_IDS.length) {
-                saveLayoutOrder(newOrder);
-            }
-        }
-    });
-}
-
-function resetLayout() {
-    if (confirm('Reset widget layout to default?')) {
-        localStorage.removeItem(LAYOUT_STORAGE_KEY);
-        applyLayoutOrder(WIDGET_IDS);
-    }
 }

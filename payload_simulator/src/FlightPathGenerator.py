@@ -32,7 +32,7 @@ class FlightPathGenerator:
         
         # Wind drift coefficients (simplified)
         # Higher altitude = more drift
-        self.wind_speed = 10.0  # m/s average
+        self.wind_speed = 50.0  # m/s average
         self.wind_direction = 135  # degrees (southeast)
         
         # Load config if provided

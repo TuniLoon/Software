@@ -1,183 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="manifest" href="/static/manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TuniLoon Ground Station</title>
-    
-    <!-- CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
-    <!-- Leaflet.js for maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Plotly for graphs -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    
-    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <header>
             <div class="header-left">
                 <h1><i class="fas fa-balloon"></i> TuniLoon</h1>
                 <span class="badge" id="status-badge">● Connecting...</span>
             </div>
             <div class="header-right">
-                <button id="reset-layout-btn" title="Reset layout" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-undo-alt"></i></button>
                 <a href="/planner" title="Flight Planner" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-rocket"></i></a>
                 <a href="#" id="export-kml" title="Download KML" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> KML</a>
                 <a href="#" id="export-gpx" title="Download GPX" style="color: var(--text-secondary); margin-right: 12px;"><i class="fas fa-download"></i> GPX</a>
                 <button id="toggle-speed" title="Toggle real-time mode" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-clock"></i></button>
                 <span id="packet-count">Packets: 0</span>
-                <button id="theme-toggle" title="Toggle theme">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <button id="reset-layout-btn" title="Reset layout" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; margin-right: 12px;"><i class="fas fa-undo-alt"></i></button>
-                <button id="clear-btn" title="Clear data">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <button id="theme-toggle" title="Toggle theme"><i class="fas fa-moon"></i></button>
+                <button id="clear-btn" title="Clear data"><i class="fas fa-trash"></i></button>
             </div>
         </header>
-        
-        <!-- Stats Bar -->
+
         <div class="stats-bar">
-            <div class="stat-card">
-                <span class="stat-label">Altitude</span>
-                <span class="stat-value" id="stat-altitude">0 m</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Latitude</span>
-                <span class="stat-value" id="stat-latitude">0.0000</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Longitude</span>
-                <span class="stat-value" id="stat-longitude">0.0000</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Temperature</span>
-                <span class="stat-value" id="stat-temperature">0.0 °C</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Pressure</span>
-                <span class="stat-value" id="stat-pressure">0.0 hPa</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Status</span>
-                <span class="stat-value status-badge" id="stat-status">—</span>
-            </div>
+            <div class="stat-card"><span class="stat-label">Altitude</span><span class="stat-value" id="stat-altitude">0 m</span></div>
+            <div class="stat-card"><span class="stat-label">Latitude</span><span class="stat-value" id="stat-latitude">0.0000</span></div>
+            <div class="stat-card"><span class="stat-label">Longitude</span><span class="stat-value" id="stat-longitude">0.0000</span></div>
+            <div class="stat-card"><span class="stat-label">Temperature</span><span class="stat-value" id="stat-temperature">0.0 °C</span></div>
+            <div class="stat-card"><span class="stat-label">Pressure</span><span class="stat-value" id="stat-pressure">0.0 hPa</span></div>
+            <div class="stat-card"><span class="stat-label">Status</span><span class="stat-value status-badge" id="stat-status">—</span></div>
         </div>
 
-        <!-- Progress Bar (single, dynamically updated) -->
         <div id="progress-container" style="margin: 10px 16px;">
-            <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
-                <span>Flight Progress</span>
-                <span id="progress-percent">0%</span>
-            </div>
-            <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;">
-                <div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div>
-            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);"><span>Flight Progress</span><span id="progress-percent">0%</span></div>
+            <div style="background: var(--bg-primary); border-radius: 8px; overflow: hidden; height: 12px; width: 100%;"><div id="flight-progress" style="width: 0%; background: linear-gradient(90deg, #ff6b35, #ff9800); height: 100%; transition: width 0.5s;"></div></div>
         </div>
-        
-        <!-- Main Grid -->
+
         <div class="main-grid">
-            <!-- Map -->
-            <div class="card map-card" draggable="true" data-widget-id="map">
-    <div class="card" draggable="true" data-widget-id="map">
-                <div class="card-header">
-                    <span><i class="fas fa-map"></i> Live Position</span>
-                    <span id="map-coords">Lat: 0.0000, Lon: 0.0000</span>
-                </div>
-                <div id="map"></div>
-            </div>
-            
-            <!-- Telemetry Details -->
-            <div class="card details-card" draggable="true" data-widget-id="details">
-                <div class="card-header">
-                    <span><i class="fas fa-chart-line"></i> Telemetry Details</span>
-                    <span id="last-updated">Last update: —</span>
-                </div>
+            <div class="card map-card"><div class="card-header"><span><i class="fas fa-map"></i> Live Position</span><span id="map-coords">Lat: 0.0000, Lon: 0.0000</span></div><div id="map"></div></div>
+            <div class="card details-card"><div class="card-header"><span><i class="fas fa-chart-line"></i> Telemetry Details</span><span id="last-updated">Last update: —</span></div>
                 <div class="details-grid">
-                    <div class="detail-item">
-                        <span class="detail-label">Time</span>
-                        <span class="detail-value" id="detail-time">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Altitude</span>
-                        <span class="detail-value" id="detail-altitude">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Latitude</span>
-                        <span class="detail-value" id="detail-latitude">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Longitude</span>
-                        <span class="detail-value" id="detail-longitude">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Temperature</span>
-                        <span class="detail-value" id="detail-temperature">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Pressure</span>
-                        <span class="detail-value" id="detail-pressure">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Humidity</span>
-                        <span class="detail-value" id="detail-humidity">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Thermal</span>
-                        <span class="detail-value" id="detail-thermal">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Status</span>
-                        <span class="detail-value" id="detail-status">—</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Checksum</span>
-                        <span class="detail-value" id="detail-checksum">—</span>
-                    </div>
+                    <div class="detail-item"><span class="detail-label">Time</span><span class="detail-value" id="detail-time">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Altitude</span><span class="detail-value" id="detail-altitude">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Latitude</span><span class="detail-value" id="detail-latitude">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Longitude</span><span class="detail-value" id="detail-longitude">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Temperature</span><span class="detail-value" id="detail-temperature">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Pressure</span><span class="detail-value" id="detail-pressure">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Humidity</span><span class="detail-value" id="detail-humidity">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Thermal</span><span class="detail-value" id="detail-thermal">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Status</span><span class="detail-value" id="detail-status">—</span></div>
+                    <div class="detail-item"><span class="detail-label">Checksum</span><span class="detail-value" id="detail-checksum">—</span></div>
                 </div>
             </div>
-            
-            <!-- Altitude Graph -->
-            <div class="card graph-card" draggable="true" data-widget-id="altitude">
-                <div class="card-header">
-                    <span><i class="fas fa-arrow-up"></i> Altitude Profile</span>
-                <button class="export-graph-btn" data-graph="altitude" title="Download PNG" style="background:none; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fas fa-download"></i></button>
-                    <span>Max: <span id="graph-max-alt">0</span> m</span>
-                </div>
-                <div id="altitude-graph"></div>
-            </div>
-            
-            <!-- Temperature Graph -->
-            <div class="card graph-card" draggable="true" data-widget-id="temperature">
-                <div class="card-header">
-                    <span><i class="fas fa-thermometer-half"></i> Temperature Profile</span>
-                <button class="export-graph-btn" data-graph="temperature" title="Download PNG" style="background:none; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fas fa-download"></i></button>
-                    <span>Min: <span id="graph-min-temp">0</span>°C | Max: <span id="graph-max-temp">0</span>°C</span>
-                </div>
-                <div id="temperature-graph"></div>
-            </div>
+            <div class="card graph-card"><div class="card-header"><span><i class="fas fa-arrow-up"></i> Altitude Profile</span><span>Max: <span id="graph-max-alt">0</span> m</span></div><div id="altitude-graph"></div></div>
+            <div class="card graph-card"><div class="card-header"><span><i class="fas fa-thermometer-half"></i> Temperature Profile</span><span>Min: <span id="graph-min-temp">0</span>°C | Max: <span id="graph-max-temp">0</span>°C</span></div><div id="temperature-graph"></div></div>
         </div>
     </div>
-    
-    <!-- JavaScript -->
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
-    <script src="{{ url_for('static', filename='weather.js') }}"></script>
-    <script>
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/static/sw.js")
-                .then(() => console.log("[SW] Registered"))
-                .catch(err => console.error("[SW] Registration failed:", err));
-        }
-    </script>
 </body>
 </html>

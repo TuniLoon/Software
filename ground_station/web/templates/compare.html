@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuniLoon Flight Comparison</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .compare-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .graph-wrapper { background: var(--bg-card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; margin-top: 20px; }
+        #comparison-graph { height: 600px; width: 100%; }
+        .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .legend-color { width: 20px; height: 4px; border-radius: 2px; }
+        .btn-back { background: #555; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .btn-back:hover { background: #444; }
+        .flight-info { margin: 12px 0; color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1><i class="fas fa-arrows-left-right"></i> Flight Comparison</h1>
+            </div>
+            <div class="header-right">
+                <a href="/history" class="btn-back"><i class="fas fa-arrow-left"></i> Back to History</a>
+            </div>
+        </header>
+        <div class="compare-container">
+            <div id="flight-info" class="flight-info">Loading flight data...</div>
+            <div class="graph-wrapper">
+                <div id="comparison-graph"></div>
+            </div>
+            <div id="legend" class="legend"></div>
+        </div>
+    </div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const ids = urlParams.get('ids');
+        if (!ids) {
+            document.getElementById('flight-info').textContent = 'No flights selected.';
+        } else {
+            const flightIds = ids.split(',');
+            fetchComparisonData(flightIds);
+        }
+
+        async function fetchComparisonData(ids) {
+            try {
+                const response = await fetch(`/api/compare?ids=${ids.join(',')}`);
+                const data = await response.json();
+                if (data.error) {
+                    document.getElementById('flight-info').textContent = 'Error: ' + data.error;
+                    return;
+                }
+                renderComparison(data);
+            } catch (e) {
+                document.getElementById('flight-info').textContent = 'Failed to load comparison data.';
+                console.error(e);
+            }
+        }
+
+        function renderComparison(data) {
+            const flights = data.flights;
+            const graphDiv = document.getElementById('comparison-graph');
+            const legendDiv = document.getElementById('legend');
+            const infoDiv = document.getElementById('flight-info');
+
+            // Display flight names
+            infoDiv.innerHTML = `Comparing ${flights.length} flights: ${flights.map(f => f.name).join(', ')}`;
+
+            // Build traces
+            const traces = [];
+            const colors = ['#2196f3', '#ff9800', '#4caf50', '#f44336', '#9c27b0', '#00bcd4', '#ffeb3b', '#e91e63'];
+            flights.forEach((flight, idx) => {
+                const color = colors[idx % colors.length];
+                const times = flight.timestamps.map(t => new Date(t).toLocaleTimeString());
+                const altitudes = flight.altitudes;
+                traces.push({
+                    name: flight.name || flight.id,
+                    x: times,
+                    y: altitudes,
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    line: { color: color, width: 2 },
+                    marker: { color: color, size: 4 }
+                });
+            });
+
+            const layout = {
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                xaxis: { title: 'Time', showgrid: true },
+                yaxis: { title: 'Altitude (m)', showgrid: true },
+                plot_bgcolor: 'transparent',
+                paper_bgcolor: 'transparent',
+                font: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#333' },
+                legend: { orientation: 'h', y: 1.1 }
+            };
+
+            Plotly.newPlot(graphDiv, traces, layout);
+
+            // Build legend (optional, since Plotly already shows one)
+            legendDiv.innerHTML = traces.map((t, i) => `
+                <div class="legend-item">
+                    <span class="legend-color" style="background:${colors[i % colors.length]}"></span>
+                    <span>${t.name}</span>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

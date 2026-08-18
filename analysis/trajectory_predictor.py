@@ -117,3 +117,33 @@ if __name__ == "__main__":
     if result:
         print(f"Landing: {result['landing_lat']:.4f}, {result['landing_lon']:.4f}")
         print(f"Duration: {result['duration']:.0f}s")
+
+    def _get_wind_at_altitude(self, lat, lon, alt, time_dt):
+        """Get forecast wind at altitude (scaled from surface)."""
+        # Get surface forecast
+        forecast = self.weather.get_forecast(lat, lon, cnt=8)
+        if not forecast:
+            return None
+        # Find closest forecast time
+        best = None
+        for item in forecast.get('list', []):
+            ft = datetime.fromtimestamp(item['dt'])
+            if abs((ft - time_dt).total_seconds()) < 7200:
+                best = item
+                break
+        if not best:
+            best = forecast['list'][0]
+        wind = best.get('wind', {'speed': 0, 'deg': 0})
+        speed = wind.get('speed', 0)
+        direction = wind.get('deg', 0)
+        
+        # More realistic altitude scaling:
+        # Speed increases up to 5000m, then gradually decreases in stratosphere
+        if alt <= 5000:
+            factor = 1 + (alt / 5000) * 1.5   # up to 2.5x at 5000m
+        elif alt <= 15000:
+            factor = 2.5  # constant high speed in troposphere
+        else:
+            factor = 2.5 * (1 - (alt - 15000) / 15000)  # decrease to zero at 30000m
+        speed = speed * max(0.5, factor)
+        return {'speed': speed, 'deg': direction}

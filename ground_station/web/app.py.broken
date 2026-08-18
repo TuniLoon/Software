@@ -1,7 +1,3 @@
-"""
-app.py – Stable version (Sprint 18 Task 3)
-"""
-
 import sys, traceback, math, time
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -134,12 +130,9 @@ def process_telemetry_endpoint():
 def analysis_page(): return render_template('analysis.html')
 @app.route('/api/analysis/latest')
 @limiter.limit("10 per minute")
-
 def analysis_latest():
     history = get_history_from_db(1000)
-    print(f"[DEBUG] analysis_latest: fetched {len(history)} records")
-    if not history:
-        return jsonify({'error': 'No flight data available'}), 404
+    if not history: return jsonify({'error':'No flight data'}),404
     from analysis.flight_analyzer import FlightAnalyzer
     from analysis.wind_estimator import WindEstimator
     from analysis.report_generator import ReportGenerator
@@ -153,12 +146,9 @@ def analysis_latest():
 
 @app.route('/api/analysis/report/download')
 @limiter.limit("5 per minute")
-
 def analysis_report_download():
     history = get_history_from_db(1000)
-    print(f"[DEBUG] analysis_report_download: fetched {len(history)} records")
-    if not history:
-        return jsonify({'error':'No flight data'}),404
+    if not history: return jsonify({'error':'No flight data'}),404
     from analysis.flight_analyzer import FlightAnalyzer
     from analysis.wind_estimator import WindEstimator
     from analysis.report_generator import ReportGenerator
@@ -254,22 +244,13 @@ def wind_at_altitude():
     wind = TrajectoryPredictor(weather_service)._get_wind_at_altitude(lat, lon, alt, datetime.now())
     return jsonify(wind) if wind else jsonify({'error':'Wind unavailable'}),500
 
-@app.route('/api/debug/db_raw')
-def debug_db_raw():
-    history = get_history_from_db(20)
-    return jsonify(history)
-
 @app.route('/history')
 def history_page(): return render_template('history.html')
 @app.route('/api/history/list')
 @limiter.limit("10 per minute")
-
 def history_list():
     from analysis.historical_browser import HistoricalBrowser
-    browser = HistoricalBrowser(data_dir=str(config.DATA_DIR))
-    flights = browser.list_flights()
-    print(f"[DEBUG] history_list: found {len(flights)} flights")
-    return jsonify(flights)
+    return jsonify(HistoricalBrowser(data_dir=str(config.DATA_DIR)).list_flights())
 
 @app.route('/api/history/report/<flight_id>')
 @limiter.limit("5 per minute")
@@ -286,26 +267,19 @@ def history_report(flight_id):
 def wind_page(): return render_template('wind.html')
 @app.route('/api/wind/current')
 @limiter.limit("10 per minute")
-
-
 def wind_current():
+    print(f"[DEBUG] wind_current history length: {len(history)}")
+    if history:
+        print(f"[DEBUG] first: {history[0].get(latitude)}, {history[0].get(longitude)}")
+        print(f"[DEBUG] last: {history[-1].get(latitude)}, {history[-1].get(longitude)}")
     history = get_history_from_db(20)
-    print(f"[DEBUG] wind_current: fetched {len(history)} records")
-    if not history:
-        print("[DEBUG] wind_current: history is empty")
-        return jsonify({'error': 'No data'}), 400
-    # Print first and last record to see keys
-    if len(history) > 0:
-        print(f"[DEBUG] wind_current: first record keys: {list(history[0].keys())}")
-        print(f"[DEBUG] wind_current: last record keys: {list(history[-1].keys())}")
-        print(f"[DEBUG] wind_current: first lat/lon: {history[0].get('latitude', history[0].get('lat', 'N/A'))}, {history[0].get('longitude', history[0].get('lon', 'N/A'))}")
-        print(f"[DEBUG] wind_current: last lat/lon: {history[-1].get('latitude', history[-1].get('lat', 'N/A'))}, {history[-1].get('longitude', history[-1].get('lon', 'N/A'))}")
-    if len(history) < 2:
-        print("[DEBUG] wind_current: less than 2 records")
-        return jsonify({'speed': 0, 'direction': 0, 'confidence': 0, 'message': 'Not enough data'}), 200
+    if len(history) < 2: return jsonify({'error':'Not enough data'}),400
     from analysis.wind_estimator import WindEstimator
     wind = WindEstimator(history).get_wind_with_confidence()
-    print(f"[DEBUG] wind_current: estimated wind = {wind}")
+    latest = get_latest_from_db()
+    if latest:
+        wind['latitude'] = latest.get('latitude')
+        wind['longitude'] = latest.get('longitude')
     return jsonify(wind)
 
 @app.route('/api/predict/trajectory', methods=['POST'])
@@ -357,7 +331,6 @@ def predict_trajectory():
 @app.route('/compare')
 def compare_page(): return render_template('compare.html')
 @app.route('/api/compare')
-
 def compare_flights():
     ids = request.args.get('ids', '')
     if not ids: return jsonify({'error':'No flight IDs'}),400
@@ -377,7 +350,6 @@ def compare_flights():
                     name = f.get('filename', fid)
                     break
             result['flights'].append({'id': fid, 'name': name, 'timestamps': timestamps, 'altitudes': altitudes})
-    print(f"[DEBUG] compare_flights: returning {len(result['flights'])} flights")
     return jsonify(result)
 
 @app.route('/replay')
@@ -388,27 +360,6 @@ def replay_upload():
     file = request.files['file']
     if file.filename == '': return jsonify({'error':'Empty filename'}),400
     return jsonify({'status':'ok'})
-@app.route('/api/debug/db')
-def debug_db():
-    flights = db.get_flights()
-    latest = get_latest_from_db()
-    total_records = 0
-    for f in flights:
-        count = db.get_history(f['id'], limit=None)
-        total_records += len(count) if count else 0
-    return jsonify({
-        'flights_count': len(flights),
-        'total_telemetry_records': total_records,
-        'latest': latest
-    })
-
-@app.route('/api/debug/wind_raw')
-def debug_wind_raw():
-    history = get_history_from_db(20)
-    if not history:
-        return jsonify({'error': 'No data'}), 404
-    simplified = [{'timestamp': d.get('timestamp'), 'lat': d.get('latitude'), 'lon': d.get('longitude'), 'alt': d.get('altitude')} for d in history]
-    return jsonify(simplified)
 
 @app.route('/api/test/summary')
 def test_summary():
@@ -488,6 +439,7 @@ def process_packet(packet_string: str):
                 else:
                     logger.warning("Telegram disabled – summary not sent")
 
+        
         # Reset summary flags for new flight (if we already sent one and see another landing)
         if summary_sent and data['altitude'] < 50 and data['status'] == 'L':
             if time.time() - last_summary_time > 5:
@@ -539,17 +491,9 @@ def run_mock_consumer_thread():
     thread.start()
     return thread
 
-if __name__ == '__main__':
-    logger.info("Starting TuniLoon Ground Station")
-    logger.info(f"http://{config.FLASK_HOST}:{config.FLASK_PORT}")
-    logger.info(f"Telegram enabled: {telegram_bot.enabled}")
-    run_mock_consumer_thread()
-    app.run(host=config.FLASK_HOST, port=config.FLASK_PORT, debug=config.FLASK_DEBUG)
 
-
-
-
-
-
+@app.route('/api/weather/key')
+def weather_key():
+    return jsonify({'key': config.OPENWEATHER_API_KEY})
 
 

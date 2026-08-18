@@ -1,20 +1,69 @@
 """
-wind_estimator.py
-Estimate wind speed and direction from GPS drift (live telemetry).
+wind_estimator.py – Sort data by timestamp before estimation.
 """
 
 import math
-from typing import List, Dict, Tuple, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict, Tuple
+from datetime import datetime
 
 class WindEstimator:
     def __init__(self, data: List[Dict] = None):
+        print(f"[WindEstimator] __init__ called with {len(data) if data else 0} points")
         self.data = data or []
+        # Sort data by timestamp in ascending order (oldest first)
+        try:
+            self.data.sort(key=lambda x: x.get('timestamp', ''))
+        except:
+            pass
         self.wind_speed = 0.0
         self.wind_direction = 0.0
         self.confidence = 0.0
         if len(self.data) >= 2:
             self._estimate()
+        else:
+            print("[WindEstimator] Not enough data (need >=2)")
+    
+    def _estimate(self):
+        print("[WindEstimator] _estimate called")
+        if len(self.data) < 2:
+            return
+        # Use the last two points in sorted order (which are the newest two, but in chronological order)
+        p1 = self.data[-2]  # second oldest of the two
+        p2 = self.data[-1]  # oldest? Actually after sorting ascending, the newest is last.
+        # Now p1 is older than p2? Let's check: after sorting ascending, data[-1] is the latest timestamp.
+        # So p1 (data[-2]) is older than p2 (data[-1]). That's correct for dt positive.
+        print(f"[WindEstimator] p1 (older): {p1.get('timestamp')}")
+        print(f"[WindEstimator] p2 (newer): {p2.get('timestamp')}")
+        lat1 = p1.get('latitude', p1.get('lat', None))
+        lon1 = p1.get('longitude', p1.get('lon', None))
+        lat2 = p2.get('latitude', p2.get('lat', None))
+        lon2 = p2.get('longitude', p2.get('lon', None))
+        
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+            print("[WindEstimator] Missing lat/lon")
+            return
+        
+        try:
+            t1 = datetime.fromisoformat(p1['timestamp'])
+            t2 = datetime.fromisoformat(p2['timestamp'])
+        except Exception as e:
+            print(f"[WindEstimator] Timestamp error: {e}")
+            return
+        
+        dt = (t2 - t1).total_seconds()
+        if dt <= 0:
+            print(f"[WindEstimator] dt <= 0 ({dt})")
+            return
+        
+        dist = self._haversine(lat1, lon1, lat2, lon2)
+        if dist == 0:
+            print("[WindEstimator] Distance is zero")
+            return
+        
+        self.wind_speed = (dist * 1000) / dt
+        self.wind_direction = self._bearing(lat1, lon1, lat2, lon2)
+        self.confidence = 1.0
+        print(f"[WindEstimator] SUCCESS: speed={self.wind_speed:.2f}, dir={self.wind_direction:.1f}, dist={dist*1000:.1f}m, dt={dt:.1f}s")
     
     def _haversine(self, lat1, lon1, lat2, lon2):
         R = 6371
@@ -33,45 +82,6 @@ class WindEstimator:
         bearing = math.degrees(math.atan2(x, y))
         return (bearing + 360) % 360
     
-    def _estimate(self):
-        """Compute wind from telemetry data (average over last N points)."""
-        if len(self.data) < 2:
-            return
-        
-        # Use last N points (max 10) for smooth estimation
-        window = min(len(self.data), 10)
-        points = self.data[-window:]
-        
-        total_speed = 0.0
-        total_dir = 0.0
-        count = 0
-        
-        for i in range(1, len(points)):
-            p1 = points[i-1]
-            p2 = points[i]
-            try:
-                dt = (datetime.fromisoformat(p2['timestamp']) - 
-                      datetime.fromisoformat(p1['timestamp'])).total_seconds()
-                if dt <= 0:
-                    continue
-                distance = self._haversine(p1['latitude'], p1['longitude'],
-                                          p2['latitude'], p2['longitude'])
-                speed = (distance * 1000) / dt  # m/s
-                bearing = self._bearing(p1['latitude'], p1['longitude'],
-                                       p2['latitude'], p2['longitude'])
-                # Weight by distance (longer distances = more reliable)
-                weight = distance
-                total_speed += speed * weight
-                total_dir += bearing * weight
-                count += weight
-            except:
-                continue
-        
-        if count > 0:
-            self.wind_speed = total_speed / count
-            self.wind_direction = total_dir / count
-            self.confidence = min(1, len(points) / 10)
-    
     def get_wind(self) -> Tuple[float, float]:
         return (self.wind_speed, self.wind_direction)
     
@@ -81,10 +91,3 @@ class WindEstimator:
             'direction': self.wind_direction,
             'confidence': self.confidence
         }
-    
-    def update(self, data: List[Dict]):
-        """Add new data and re‑estimate."""
-        self.data = data
-        if len(data) >= 2:
-            self._estimate()
-        return self.get_wind_with_confidence()
